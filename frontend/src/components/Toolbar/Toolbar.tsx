@@ -4,6 +4,7 @@ interface ToolbarProps {
   onAddState: (stateName: string, isInitial: boolean) => void;
   onDeleteSelected: () => void;
   onToggleTransitionMode: (mode: boolean) => void;
+  onOpenExamples: () => void; // NEW
   isTransitionMode: boolean;
   stateMachineCount: number;
 }
@@ -12,6 +13,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onAddState,
   onDeleteSelected,
   onToggleTransitionMode,
+  onOpenExamples, // NEW
   isTransitionMode,
   stateMachineCount,
 }) => {
@@ -60,6 +62,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
     fontWeight: "bold",
   };
 
+  const examplesButtonStyle: React.CSSProperties = {
+    // NEW
+    ...buttonStyle,
+    backgroundColor: "#4caf50",
+  };
+
   const deleteButtonStyle: React.CSSProperties = {
     ...buttonStyle,
     backgroundColor: "#f44336",
@@ -76,6 +84,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <div style={toolbarStyle}>
+      {/* NEW: Examples Button */}
+      <button
+        onClick={onOpenExamples}
+        style={examplesButtonStyle}
+        title="Load example FSMs from the book"
+      >
+        📚 Examples
+      </button>
+
+      {/* Separator */}
+      <div style={{ width: "1px", height: "24px", backgroundColor: "#ddd" }} />
+
       <span style={{ fontWeight: "bold" }}>States: {stateMachineCount}</span>
 
       {/* State Creation */}

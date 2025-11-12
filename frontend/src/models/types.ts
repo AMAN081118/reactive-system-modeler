@@ -29,6 +29,10 @@ export interface Transition {
   output?: string;
   guard?: string;
   action?: string;
+  // --- New fields for editable, curved transitions ---
+  sourceAngle?: number; // Angle (radians) where arrow leaves source node
+  targetAngle?: number; // Angle (radians) where arrow enters target node
+  controlOffset?: Position; // Offset for the bezier control point relative to the midpoint
 }
 
 // Variable definition
@@ -76,7 +80,7 @@ export interface CanvasState {
 // Editor actions
 export type EditorAction =
   | { type: "SELECT_STATE"; payload: string }
-  | { type: "SELECT_TRANSITION"; payload: string }
+  | { type: "SELECT_TRANSITION"; payload: string | null } // changes
   | { type: "DESELECT" }
   | { type: "SET_ZOOM"; payload: number }
   | { type: "ADD_STATE"; payload: State }

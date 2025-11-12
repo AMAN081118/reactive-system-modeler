@@ -1,13 +1,22 @@
-import React, { useState, useReducer } from "react";
+import React, { useState, useReducer, useRef } from "react";
 import {
   State,
   StateMachine,
   Transition,
   CanvasState,
   EditorAction,
+  Position,
 } from "../../models/types";
 import StateNode from "./StateNode";
-import "./Canvas.module.css";
+import styles from "./Canvas.module.css"; // Import CSS Module
+import {
+  Info,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  MousePointerClick,
+  Move,
+} from "lucide-react";
 
 interface CanvasProps {
   stateMachine: StateMachine;
@@ -18,6 +27,146 @@ interface CanvasProps {
   onTransitionModeChange: (mode: boolean) => void;
 }
 
+// --- Geometry Constants & Helpers ---
+const NODE_SIZE = 100;
+const NODE_RADIUS = NODE_SIZE / 2;
+const HANDLE_RADIUS = 6; // Size of the interactive drag handles
+
+function getAngle(p1: Position, p2: Position): number {
+  return Math.atan2(p2.y - p1.y, p2.x - p1.x);
+}
+
+function getCircleEdgePoint(cx: number, cy: number, angle: number): Position {
+  return {
+    x: cx + NODE_RADIUS * Math.cos(angle),
+    y: cy + NODE_RADIUS * Math.sin(angle),
+  };
+}
+
+function getRectEdgePoint(cx: number, cy: number, angle: number): Position {
+  const PI = Math.PI;
+  // Normalize angle to -PI to PI for easier quadrant checking
+  let normAngle = angle;
+  while (normAngle <= -PI) normAngle += 2 * PI;
+  while (normAngle > PI) normAngle -= 2 * PI;
+
+  const slope = Math.tan(normAngle);
+
+  if (normAngle > -PI / 4 && normAngle < PI / 4) {
+    // Right edge
+    return { x: cx + NODE_RADIUS, y: cy + NODE_RADIUS * slope };
+  } else if (normAngle >= PI / 4 && normAngle < (3 * PI) / 4) {
+    // Bottom edge
+    return { x: cx - NODE_RADIUS / slope, y: cy + NODE_RADIUS };
+  } else if (
+    (normAngle >= (3 * PI) / 4 && normAngle <= PI) ||
+    (normAngle >= -PI && normAngle < (-3 * PI) / 4)
+  ) {
+    // Left edge
+    return { x: cx - NODE_RADIUS, y: cy - NODE_RADIUS * slope };
+  } else {
+    // Top edge
+    return { x: cx + NODE_RADIUS / slope, y: cy - NODE_RADIUS };
+  }
+}
+
+function getNodeBoundaryPoint(state: State, angle: number): Position {
+  const cx = state.position.x + NODE_RADIUS;
+  const cy = state.position.y + NODE_RADIUS;
+  return state.isInitial
+    ? getCircleEdgePoint(cx, cy, angle)
+    : getRectEdgePoint(cx, cy, angle);
+}
+
+// Calculates the full geometry for a generic transition (including self-loops)
+function getTransitionGeometry(
+  fromState: State,
+  toState: State,
+  transition: Transition,
+) {
+  // 1. Determine Angles (use stored values or calculate smart defaults)
+  let sourceAngle = transition.sourceAngle;
+  let targetAngle = transition.targetAngle;
+
+  if (sourceAngle === undefined || targetAngle === undefined) {
+    const fromCX = fromState.position.x + NODE_RADIUS;
+    const fromCY = fromState.position.y + NODE_RADIUS;
+    const toCX = toState.position.x + NODE_RADIUS;
+    const toCY = toState.position.y + NODE_RADIUS;
+
+    // Calculate defaults if this is an old transition without stored angles
+    if (fromState.id === toState.id) {
+      // Default self-loop angles (top-left to top-right)
+      sourceAngle = sourceAngle ?? -Math.PI / 1.2; // ~ -150 degrees
+      targetAngle = targetAngle ?? -Math.PI / 4; // ~ -45 degrees
+    } else {
+      // Default straight line angles
+      const angle = Math.atan2(toCY - fromCY, toCX - fromCX);
+      sourceAngle = sourceAngle ?? angle;
+      targetAngle = targetAngle ?? angle + Math.PI;
+    }
+  }
+
+  // 2. Calculate start and end points on node boundaries
+  const startPos = getNodeBoundaryPoint(fromState, sourceAngle);
+  const endPos = getNodeBoundaryPoint(toState, targetAngle);
+
+  // 3. Calculate Control Point
+  const midX = (startPos.x + endPos.x) / 2;
+  const midY = (startPos.y + endPos.y) / 2;
+
+  // Use stored control offset or default to 0,0 (straight line)
+  // For self-loops, default to a slight upward curve if no offset exists
+  const defaultOffset =
+    fromState.id === toState.id && !transition.controlOffset
+      ? { x: 0, y: -80 }
+      : { x: 0, y: 0 };
+
+  const offsetX = transition.controlOffset?.x ?? defaultOffset.x;
+  const offsetY = transition.controlOffset?.y ?? defaultOffset.y;
+
+  const controlPos = {
+    x: midX + offsetX,
+    y: midY + offsetY,
+  };
+
+  // 4. Determine Label Position (at the peak of the curve, t=0.5)
+  const t = 0.5;
+  const labelX =
+    (1 - t) * (1 - t) * startPos.x +
+    2 * (1 - t) * t * controlPos.x +
+    t * t * endPos.x;
+  const labelY =
+    (1 - t) * (1 - t) * startPos.y +
+    2 * (1 - t) * t * controlPos.y +
+    t * t * endPos.y;
+
+  // 5. Generate Path Data (Quadratic Bezier: M start Q control end)
+  const pathD = `M ${startPos.x} ${startPos.y} Q ${controlPos.x} ${controlPos.y} ${endPos.x} ${endPos.y}`;
+
+  // 6. Calculate arrow angle for correct marker orientation
+  // Tangent at end point (t=1) for quadratic bezier is proportional to (End - Control)
+  const arrowAngleRad = Math.atan2(
+    endPos.y - controlPos.y,
+    endPos.x - controlPos.x,
+  );
+  const arrowAngleDeg = (arrowAngleRad * 180) / Math.PI;
+
+  return {
+    pathD,
+    startPos,
+    endPos,
+    controlPos,
+    midPos: { x: midX, y: midY },
+    labelPos: { x: labelX, y: labelY },
+    arrowAngle: arrowAngleDeg,
+    // Return effective angles for handle rendering if needed
+    sourceAngle,
+    targetAngle,
+  };
+}
+
+// Local reducer for purely UI state (selection, zoom)
 const canvasReducer = (
   state: CanvasState,
   action: EditorAction,
@@ -29,11 +178,19 @@ const canvasReducer = (
         selectedStateId: action.payload,
         selectedTransitionId: null,
       };
+    case "SELECT_TRANSITION":
+      return {
+        ...state,
+        selectedStateId: null,
+        // Ensure we handle null payload if passed, though typings might need strict check
+        selectedTransitionId: action.payload,
+      };
     case "DESELECT":
       return { ...state, selectedStateId: null, selectedTransitionId: null };
     case "SET_ZOOM":
       return { ...state, zoom: action.payload };
     default:
+      // Ignore other editor actions that don't affect local UI state
       return state;
   }
 };
@@ -45,187 +202,6 @@ const initialCanvasState: CanvasState = {
   zoom: 1,
 };
 
-const NODE_SIZE = 100;
-const NODE_RADIUS = NODE_SIZE / 2;
-const SELF_LOOP_RADIUS = 60;
-const TRANSITION_OFFSET = 15;
-const LABEL_OFFSET = 18; // Distance from line to label
-
-/**
- * Simple function to get edge point on circle
- */
-function getCircleEdgePoint(
-  centerX: number,
-  centerY: number,
-  angle: number,
-): { x: number; y: number } {
-  return {
-    x: centerX + NODE_RADIUS * Math.cos(angle),
-    y: centerY + NODE_RADIUS * Math.sin(angle),
-  };
-}
-
-/**
- * Get edge point on rectangle
- */
-function getRectEdgePoint(
-  centerX: number,
-  centerY: number,
-  angle: number,
-): { x: number; y: number } {
-  const PI = Math.PI;
-  const slope = Math.tan(angle);
-
-  if (angle > -PI / 4 && angle < PI / 4) {
-    // Right edge
-    return { x: centerX + NODE_RADIUS, y: centerY + NODE_RADIUS * slope };
-  } else if (angle >= PI / 4 && angle < (3 * PI) / 4) {
-    // Top edge
-    return { x: centerX - NODE_RADIUS / slope, y: centerY - NODE_RADIUS };
-  } else if (angle >= (3 * PI) / 4 || angle < (-3 * PI) / 4) {
-    // Left edge
-    return { x: centerX - NODE_RADIUS, y: centerY - NODE_RADIUS * slope };
-  } else {
-    // Bottom edge
-    return { x: centerX + NODE_RADIUS / slope, y: centerY + NODE_RADIUS };
-  }
-}
-
-/**
- * Get straight arrow line with offset for parallel transitions
- * Returns label position on opposite sides for parallel arrows
- */
-function getArrowLine(
-  fromState: State,
-  toState: State,
-  offsetIndex: number,
-  allTransitions: Transition[],
-): {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  midX: number;
-  midY: number;
-  labelX: number;
-  labelY: number;
-} {
-  // Centers of states
-  const fromCX = fromState.position.x + NODE_RADIUS;
-  const fromCY = fromState.position.y + NODE_RADIUS;
-  const toCX = toState.position.x + NODE_RADIUS;
-  const toCY = toState.position.y + NODE_RADIUS;
-
-  // Vector from source to target
-  const dx = toCX - fromCX;
-  const dy = toCY - fromCY;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  const angle = Math.atan2(dy, dx);
-
-  // Perpendicular direction for offset
-  const perpX = -dy / distance;
-  const perpY = dx / distance;
-
-  // Apply offset for parallel transitions
-  const offsetDist = offsetIndex * TRANSITION_OFFSET;
-  const offsetFromCX = fromCX + perpX * offsetDist;
-  const offsetFromCY = fromCY + perpY * offsetDist;
-  const offsetToCX = toCX + perpX * offsetDist;
-  const offsetToCY = toCY + perpY * offsetDist;
-
-  // Get edge points
-  let x1: number, y1: number, x2: number, y2: number;
-
-  if (fromState.isInitial) {
-    const p = getCircleEdgePoint(offsetFromCX, offsetFromCY, angle);
-    x1 = p.x;
-    y1 = p.y;
-  } else {
-    const p = getRectEdgePoint(offsetFromCX, offsetFromCY, angle);
-    x1 = p.x;
-    y1 = p.y;
-  }
-
-  if (toState.isInitial) {
-    const p = getCircleEdgePoint(offsetToCX, offsetToCY, angle + Math.PI);
-    x2 = p.x;
-    y2 = p.y;
-  } else {
-    const p = getRectEdgePoint(offsetToCX, offsetToCY, angle + Math.PI);
-    x2 = p.x;
-    y2 = p.y;
-  }
-
-  const midX = (x1 + x2) / 2;
-  const midY = (y1 + y2) / 2;
-
-  // Calculate label position offset based on which parallel line this is
-  // If offsetIndex is positive, place label above line
-  // If offsetIndex is negative, place label below line
-  const labelOffsetDistance = offsetIndex >= 0 ? LABEL_OFFSET : -LABEL_OFFSET;
-  const labelX = midX + perpX * labelOffsetDistance;
-  const labelY = midY + perpY * labelOffsetDistance;
-
-  return { x1, y1, x2, y2, midX, midY, labelX, labelY };
-}
-
-/**
- * Get self-loop curved path with proper label positioning
- */
-function getSelfLoopPath(
-  state: State,
-  offsetIndex: number,
-): { pathD: string; labelX: number; labelY: number } {
-  const centerX = state.position.x + NODE_RADIUS;
-  const centerY = state.position.y + NODE_RADIUS;
-
-  // Top of circle/rect for loop
-  const topY = centerY - NODE_RADIUS;
-
-  // Loop extends above the state
-  const loopY = topY - SELF_LOOP_RADIUS;
-  const loopLeft = centerX - SELF_LOOP_RADIUS + offsetIndex * 20;
-  const loopRight = centerX + SELF_LOOP_RADIUS + offsetIndex * 20;
-
-  // Start and end point (top of state)
-  const startX = centerX;
-  const startY = topY;
-
-  // Create cubic bezier loop
-  const pathD = `M ${startX} ${startY} C ${loopLeft} ${loopY}, ${loopRight} ${loopY}, ${startX} ${startY}`;
-
-  return {
-    pathD,
-    labelX: centerX + offsetIndex * 15,
-    labelY: loopY - 15,
-  };
-}
-
-/**
- * Get offset index for parallel transitions
- */
-function getTransitionOffset(
-  transition: Transition,
-  allTransitions: Transition[],
-): number {
-  // Find all transitions between same two states (in either direction)
-  const parallels = allTransitions.filter(
-    (t) =>
-      (t.from === transition.from && t.to === transition.to) ||
-      (t.from === transition.to && t.to === transition.from),
-  );
-
-  if (parallels.length === 1) return 0;
-
-  // Sort by ID for consistent ordering
-  parallels.sort((a, b) => a.id.localeCompare(b.id));
-
-  const index = parallels.findIndex((t) => t.id === transition.id);
-
-  // Center the offsets: -1, 0, 1 for 3 transitions
-  return index - Math.floor((parallels.length - 1) / 2);
-}
-
 const Canvas: React.FC<CanvasProps> = ({
   stateMachine,
   onStateMachineChange,
@@ -235,6 +211,14 @@ const Canvas: React.FC<CanvasProps> = ({
   onTransitionModeChange,
 }) => {
   const [canvasState, dispatch] = useReducer(canvasReducer, initialCanvasState);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStartX, setPanStartX] = useState(0);
+  const [panStartY, setPanStartY] = useState(0);
+  const [showInfo, setShowInfo] = useState(true);
+
+  // Drag states
   const [draggedState, setDraggedState] = useState<{
     id: string;
     startX: number;
@@ -243,61 +227,33 @@ const Canvas: React.FC<CanvasProps> = ({
     initialY: number;
   } | null>(null);
 
+  const [draggedHandle, setDraggedHandle] = useState<{
+    transitionId: string;
+    type: "source" | "target" | "control";
+  } | null>(null);
+
   const [transitionFromState, setTransitionFromState] = useState<string | null>(
     null,
   );
+  const canvasRef = useRef<HTMLDivElement>(null);
+
+  // --- Event Handlers ---
 
   const handleStateClick = (
     stateId: string,
     event: React.MouseEvent<HTMLDivElement>,
   ): void => {
-    if (draggedState) return;
+    if (draggedState || draggedHandle || isPanning) return;
     event.stopPropagation();
 
     if (isTransitionMode) {
       if (!transitionFromState) {
-        // First click - select source
         setTransitionFromState(stateId);
         dispatch({ type: "SELECT_STATE", payload: stateId });
         onSelectState(stateId);
-      } else if (transitionFromState === stateId) {
-        // Same state - create self-loop
-        const newTransition: Transition = {
-          id: `trans-${Date.now()}`,
-          from: stateId,
-          to: stateId,
-          input: "",
-          output: "",
-        };
-
-        onStateMachineChange({
-          ...stateMachine,
-          transitions: [...stateMachine.transitions, newTransition],
-        });
-
-        setTransitionFromState(null);
-        dispatch({ type: "DESELECT" });
-        onSelectState("");
-        onSelectTransition(newTransition.id);
       } else {
-        // Different state - create normal transition
-        const newTransition: Transition = {
-          id: `trans-${Date.now()}`,
-          from: transitionFromState,
-          to: stateId,
-          input: "",
-          output: "",
-        };
-
-        onStateMachineChange({
-          ...stateMachine,
-          transitions: [...stateMachine.transitions, newTransition],
-        });
-
-        setTransitionFromState(null);
-        dispatch({ type: "DESELECT" });
-        onSelectState("");
-        onSelectTransition(newTransition.id);
+        // Complete the transition
+        createTransition(transitionFromState, stateId);
       }
     } else {
       dispatch({ type: "SELECT_STATE", payload: stateId });
@@ -306,11 +262,41 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
+  const createTransition = (fromId: string, toId: string) => {
+    const newTransition: Transition = {
+      id: `trans-${Date.now()}`,
+      from: fromId,
+      to: toId,
+      // Optional fields from your types.ts
+      input: undefined,
+      output: undefined,
+      guard: undefined,
+      action: undefined,
+      // Initialize geometry fields as undefined to let helper calculate defaults
+      sourceAngle: undefined,
+      targetAngle: undefined,
+      controlOffset: undefined,
+    };
+
+    onStateMachineChange({
+      ...stateMachine,
+      transitions: [...stateMachine.transitions, newTransition],
+    });
+
+    setTransitionFromState(null);
+    dispatch({ type: "DESELECT" });
+    onSelectState("");
+    // Optionally auto-select new transition and exit mode
+    onTransitionModeChange(false);
+    dispatch({ type: "SELECT_TRANSITION", payload: newTransition.id });
+    onSelectTransition(newTransition.id);
+  };
+
   const handleStateMouseDown = (
     stateId: string,
     e: React.MouseEvent<HTMLDivElement>,
   ): void => {
-    if (isTransitionMode) return;
+    if (isTransitionMode || e.button !== 0) return; // Only left click
     e.preventDefault();
     e.stopPropagation();
 
@@ -326,111 +312,398 @@ const Canvas: React.FC<CanvasProps> = ({
     });
   };
 
+  const handleHandleMouseDown = (
+    e: React.MouseEvent,
+    transitionId: string,
+    type: "source" | "target" | "control",
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggedHandle({ transitionId, type });
+  };
+
+  // Unified Mouse Move
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (!draggedState) return;
+    // 1. Panning
+    if (isPanning) {
+      setPanX((panX) => panX + (e.clientX - panStartX));
+      setPanY((panY) => panY + (e.clientY - panStartY));
+      setPanStartX(e.clientX);
+      setPanStartY(e.clientY);
+      return;
+    }
 
-    const deltaX = e.clientX - draggedState.startX;
-    const deltaY = e.clientY - draggedState.startY;
+    const zoom = canvasState.zoom;
 
-    const updatedStates = stateMachine.states.map((state) => {
-      if (state.id === draggedState.id) {
-        return {
-          ...state,
-          position: {
-            x: draggedState.initialX + deltaX,
-            y: draggedState.initialY + deltaY,
-          },
+    // 2. Node Dragging
+    if (draggedState) {
+      const deltaX = (e.clientX - draggedState.startX) / zoom;
+      const deltaY = (e.clientY - draggedState.startY) / zoom;
+
+      const updatedStates = stateMachine.states.map((state) => {
+        if (state.id === draggedState.id) {
+          return {
+            ...state,
+            position: {
+              x: draggedState.initialX + deltaX,
+              y: draggedState.initialY + deltaY,
+            },
+          };
+        }
+        return state;
+      });
+
+      onStateMachineChange({ ...stateMachine, states: updatedStates });
+      return;
+    }
+
+    // 3. Transition Handle Dragging
+    if (draggedHandle) {
+      const transition = stateMachine.transitions.find(
+        (t) => t.id === draggedHandle.transitionId,
+      );
+      if (!transition) return;
+
+      const fromState = stateMachine.states.find(
+        (s) => s.id === transition.from,
+      )!;
+      const toState = stateMachine.states.find((s) => s.id === transition.to)!;
+      const geo = getTransitionGeometry(fromState, toState, transition);
+
+      if (!canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      // Calculate mouse position in "Canvas World" coordinates
+      const mouseX = (e.clientX - rect.left - panX) / zoom;
+      const mouseY = (e.clientY - rect.top - panY) / zoom;
+
+      let updatedTransition = { ...transition };
+
+      if (draggedHandle.type === "source") {
+        const center = {
+          x: fromState.position.x + NODE_RADIUS,
+          y: fromState.position.y + NODE_RADIUS,
+        };
+        updatedTransition.sourceAngle = getAngle(center, {
+          x: mouseX,
+          y: mouseY,
+        });
+      } else if (draggedHandle.type === "target") {
+        const center = {
+          x: toState.position.x + NODE_RADIUS,
+          y: toState.position.y + NODE_RADIUS,
+        };
+        updatedTransition.targetAngle = getAngle(center, {
+          x: mouseX,
+          y: mouseY,
+        });
+      } else if (draggedHandle.type === "control") {
+        // New offset is the difference between current mouse pos and the straight-line midpoint
+        updatedTransition.controlOffset = {
+          x: mouseX - geo.midPos.x,
+          y: mouseY - geo.midPos.y,
         };
       }
-      return state;
-    });
 
-    onStateMachineChange({
-      ...stateMachine,
-      states: updatedStates,
-    });
+      onStateMachineChange({
+        ...stateMachine,
+        transitions: stateMachine.transitions.map((t) =>
+          t.id === transition.id ? updatedTransition : t,
+        ),
+      });
+    }
   };
 
   const handleMouseUp = (): void => {
     setDraggedState(null);
+    setDraggedHandle(null);
+    setIsPanning(false);
   };
 
   const handleCanvasClick = (): void => {
-    if (draggedState) return;
+    if (draggedState || draggedHandle || isPanning) return;
     dispatch({ type: "DESELECT" });
     onSelectState("");
     onSelectTransition(null);
     setTransitionFromState(null);
   };
 
-  const handleZoom = (direction: "in" | "out"): void => {
-    const newZoom =
-      direction === "in" ? canvasState.zoom * 1.1 : canvasState.zoom / 1.1;
-    dispatch({
-      type: "SET_ZOOM",
-      payload: Math.max(0.5, Math.min(3, newZoom)),
-    });
+  const handleTransitionClick = (e: React.MouseEvent, transitionId: string) => {
+    e.stopPropagation();
+    dispatch({ type: "SELECT_TRANSITION", payload: transitionId });
+    onSelectTransition(transitionId);
   };
 
-  const canvasStyle: React.CSSProperties = {
-    width: "100%",
-    height: "100%",
-    border: "1px solid #ccc",
-    position: "relative",
-    overflow: "hidden",
-    backgroundColor: isTransitionMode ? "#f0f8ff" : "#f9f9f9",
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.max(0.3, Math.min(3, canvasState.zoom * delta));
+    dispatch({ type: "SET_ZOOM", payload: newZoom });
   };
 
-  const containerStyle: React.CSSProperties = {
-    transform: `scale(${canvasState.zoom})`,
-    transformOrigin: "0 0",
-    position: "relative",
-    width: "100%",
-    height: "100%",
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
+    // Middle mouse or Alt+Left Click to pan
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      e.preventDefault();
+      setIsPanning(true);
+      setPanStartX(e.clientX);
+      setPanStartY(e.clientY);
+    }
+  };
+
+  // --- Styles ---
+  const zoomControlsStyle: React.CSSProperties = {
+    position: "absolute",
+    bottom: 24,
+    right: 24,
+    zIndex: 100,
+    display: "flex",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: "8px",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+    padding: "4px",
+    border: "1px solid #e5e7eb",
+  };
+
+  const zoomButtonStyle: React.CSSProperties = {
+    padding: "8px",
+    backgroundColor: "transparent",
+    color: "#4b5563",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "all 0.2s ease",
+  };
+
+  const zoomDividerStyle: React.CSSProperties = {
+    width: "1px",
+    height: "24px",
+    backgroundColor: "#e5e7eb",
+    margin: "0 4px",
+  };
+
+  const infoStyle: React.CSSProperties = {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backdropFilter: "blur(8px)",
+    color: "#374151",
+    padding: "12px 16px",
+    borderRadius: "10px",
+    fontSize: "0.875rem",
+    zIndex: 100,
+    display: showInfo ? "block" : "none",
+    boxShadow:
+      "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+    border: "1px solid rgba(229, 231, 235, 0.5)",
+    maxWidth: "260px",
+  };
+
+  const infoHeaderStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: "8px",
+    fontSize: "0.95rem",
+  };
+
+  const infoRowStyle: React.CSSProperties = {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: "4px",
+    fontSize: "0.85rem",
+  };
+
+  const instructionStyle: React.CSSProperties = {
+    position: "absolute",
+    top: 80,
+    left: "50%",
+    transform: "translateX(-50%)",
+    backgroundColor: "rgba(31, 41, 55, 0.9)",
+    color: "white",
+    padding: "8px 16px",
+    borderRadius: "20px",
+    fontSize: "0.875rem",
+    fontWeight: "500",
+    zIndex: 100,
+    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+    backdropFilter: "blur(4px)",
+  };
+
+  const infoToggleStyle: React.CSSProperties = {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    backgroundColor: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: "8px",
+    padding: "8px",
+    cursor: "pointer",
+    color: "#4b5563",
+    zIndex: 100,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "all 0.2s",
   };
 
   return (
     <div
-      style={canvasStyle}
+      id="fsm-canvas"
+      ref={canvasRef}
+      className={styles.canvas}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onClick={handleCanvasClick}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
     >
-      {/* Transition Mode Indicator */}
-      {isTransitionMode && (
+      {/* UI Controls */}
+      <button
+        onClick={() => setShowInfo(!showInfo)}
+        style={infoToggleStyle}
+        title={showInfo ? "Hide Info" : "Show Info"}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = "#f9fafb";
+          e.currentTarget.style.color = "#111827";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "white";
+          e.currentTarget.style.color = "#4b5563";
+        }}
+      >
+        <Info size={20} />
+      </button>
+
+      <div style={infoStyle}>
+        <div style={infoHeaderStyle}>
+          <MousePointerClick size={16} className="text-blue-600" />
+          Canvas Controls
+        </div>
+        <div style={infoRowStyle}>
+          <span style={{ color: "#6b7280" }}>Zoom:</span>
+          <span style={{ fontWeight: "600" }}>
+            {(canvasState.zoom * 100).toFixed(0)}%
+          </span>
+        </div>
+        <div style={infoRowStyle}>
+          <span style={{ color: "#6b7280" }}>Position:</span>
+          <span style={{ fontFamily: "monospace" }}>
+            ({panX.toFixed(0)}, {panY.toFixed(0)})
+          </span>
+        </div>
         <div
           style={{
-            position: "absolute",
-            top: 50,
-            left: "50%",
-            transform: "translateX(-50%)",
-            backgroundColor: "#4caf50",
-            color: "white",
-            padding: "8px 16px",
-            borderRadius: "4px",
-            fontSize: "14px",
-            fontWeight: "bold",
-            zIndex: 100,
+            marginTop: "12px",
+            paddingTop: "12px",
+            borderTop: "1px solid #e5e7eb",
+            fontSize: "0.75rem",
+            color: "#6b7280",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
           }}
         >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <Move size={14} /> Middle-click + drag to pan
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <ZoomIn size={14} /> Scroll to zoom in/out
+          </div>
+        </div>
+      </div>
+
+      {isTransitionMode && (
+        <div style={instructionStyle}>
           {transitionFromState
-            ? "Click target state (same state = self-loop)"
-            : "Click source state"}
+            ? "🎯 Click target state to complete transition"
+            : "🎯 Click source state to start transition"}
         </div>
       )}
 
-      {/* Zoom Controls */}
-      <div style={{ position: "absolute", top: 10, right: 10, zIndex: 100 }}>
-        <button onClick={() => handleZoom("in")} style={{ marginRight: 5 }}>
-          + Zoom
+      <div style={zoomControlsStyle}>
+        <button
+          onClick={() =>
+            dispatch({
+              type: "SET_ZOOM",
+              payload: Math.max(0.3, canvasState.zoom * 0.9),
+            })
+          }
+          style={zoomButtonStyle}
+          title="Zoom Out"
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor = "#f3f4f6")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = "transparent")
+          }
+        >
+          <ZoomOut size={20} />
         </button>
-        <button onClick={() => handleZoom("out")}>- Zoom</button>
+        <div style={zoomDividerStyle} />
+        <button
+          onClick={() => {
+            dispatch({ type: "SET_ZOOM", payload: 1 });
+            setPanX(0);
+            setPanY(0);
+          }}
+          style={zoomButtonStyle}
+          title="Reset View"
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor = "#f3f4f6")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = "transparent")
+          }
+        >
+          <RotateCcw size={18} />
+        </button>
+        <div style={zoomDividerStyle} />
+        <button
+          onClick={() =>
+            dispatch({
+              type: "SET_ZOOM",
+              payload: Math.min(3, canvasState.zoom * 1.1),
+            })
+          }
+          style={zoomButtonStyle}
+          title="Zoom In"
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor = "#f3f4f6")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = "transparent")
+          }
+        >
+          <ZoomIn size={20} />
+        </button>
       </div>
 
-      {/* Canvas Container */}
-      <div style={containerStyle}>
-        {/* States */}
+      {/* Main Canvas Content */}
+      <div
+        style={{
+          transform: `translate(${panX}px, ${panY}px) scale(${canvasState.zoom})`,
+          transformOrigin: "0 0",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          transition:
+            isPanning || draggedState || draggedHandle
+              ? "none"
+              : "transform 0.1s ease-out",
+        }}
+      >
+        {/* Nodes */}
         {stateMachine.states.map((state) => (
           <StateNode
             key={state.id}
@@ -445,7 +718,7 @@ const Canvas: React.FC<CanvasProps> = ({
           />
         ))}
 
-        {/* Transitions */}
+        {/* Transitions Layer */}
         <svg
           style={{
             position: "absolute",
@@ -453,10 +726,35 @@ const Canvas: React.FC<CanvasProps> = ({
             left: 0,
             width: "100%",
             height: "100%",
+            overflow: "visible",
             pointerEvents: "none",
           }}
         >
-          {/* Draw all transitions */}
+          <defs>
+            <marker
+              id="arrowhead-norm"
+              markerWidth="10"
+              markerHeight="10"
+              refX="9"
+              refY="5"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />{" "}
+              {/* Slate-400 for normal arrows */}
+            </marker>
+            <marker
+              id="arrowhead-sel"
+              markerWidth="10"
+              markerHeight="10"
+              refX="9"
+              refY="5"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />{" "}
+              {/* Blue-500 for selected */}
+            </marker>
+          </defs>
+
           {stateMachine.transitions.map((transition) => {
             const fromState = stateMachine.states.find(
               (s) => s.id === transition.from,
@@ -469,104 +767,131 @@ const Canvas: React.FC<CanvasProps> = ({
 
             const isSelected =
               canvasState.selectedTransitionId === transition.id;
-            const isSelfLoop = transition.from === transition.to;
-
-            let pathD: string;
-            let labelX: number;
-            let labelY: number;
-
-            if (isSelfLoop) {
-              // Self-loop
-              const offsetIndex = getTransitionOffset(
-                transition,
-                stateMachine.transitions,
-              );
-              const loop = getSelfLoopPath(fromState, offsetIndex);
-              pathD = loop.pathD;
-              labelX = loop.labelX;
-              labelY = loop.labelY;
-            } else {
-              // Regular transition
-              const offsetIndex = getTransitionOffset(
-                transition,
-                stateMachine.transitions,
-              );
-              const arrow = getArrowLine(
-                fromState,
-                toState,
-                offsetIndex,
-                stateMachine.transitions,
-              );
-              pathD = `M ${arrow.x1} ${arrow.y1} L ${arrow.x2} ${arrow.y2}`;
-              labelX = arrow.labelX;
-              labelY = arrow.labelY;
-            }
+            const geo = getTransitionGeometry(fromState, toState, transition);
 
             return (
               <g
                 key={transition.id}
-                style={{ cursor: "pointer" }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectTransition(transition.id);
-                }}
+                onClick={(e) => handleTransitionClick(e, transition.id)}
+                style={{ pointerEvents: "all", cursor: "pointer" }}
               >
-                {/* Path */}
+                {/* Hit area */}
                 <path
-                  d={pathD}
-                  stroke={isSelected ? "#1976d2" : "#666"}
+                  d={geo.pathD}
+                  stroke="transparent"
+                  strokeWidth="15"
+                  fill="none"
+                />
+                {/* Visible line */}
+                <path
+                  d={geo.pathD}
+                  stroke={isSelected ? "#3b82f6" : "#94a3b8"}
                   strokeWidth={isSelected ? 3 : 2}
                   fill="none"
                   markerEnd={`url(#arrowhead-${isSelected ? "sel" : "norm"})`}
-                  style={{ pointerEvents: "stroke" }}
+                  opacity={isSelected ? 1 : 0.8}
+                  style={{ transition: "stroke 0.2s, stroke-width 0.2s" }}
                 />
 
                 {/* Label */}
-                {(transition.input || transition.output) && (
-                  <text
-                    x={labelX}
-                    y={labelY}
-                    textAnchor="middle"
-                    fontSize="12"
-                    fill={isSelected ? "#1976d2" : "#333"}
-                    fontWeight={isSelected ? "bold" : "normal"}
-                    style={{
-                      userSelect: "none",
-                      pointerEvents: "none",
-                    }}
+                {(transition.input ||
+                  transition.output ||
+                  transition.guard ||
+                  transition.action) && (
+                  <g
+                    transform={`translate(${geo.labelPos.x}, ${geo.labelPos.y})`}
                   >
-                    {transition.input || ""}
-                    {transition.input && transition.output ? "/" : ""}
-                    {transition.output || ""}
-                  </text>
+                    <rect
+                      x="-36"
+                      y="-14"
+                      width="72"
+                      height="28"
+                      fill="white"
+                      stroke={isSelected ? "#3b82f6" : "#e2e8f0"}
+                      strokeWidth="1"
+                      rx="6"
+                      style={{ transition: "stroke 0.2s" }}
+                    />
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize="11"
+                      fill={isSelected ? "#1e3a8a" : "#475569"}
+                      fontWeight={isSelected ? "600" : "500"}
+                      style={{
+                        userSelect: "none",
+                        pointerEvents: "none",
+                        fontFamily: "sans-serif",
+                      }}
+                    >
+                      {[transition.input, transition.output]
+                        .filter(Boolean)
+                        .join(" / ")}
+                    </text>
+                  </g>
+                )}
+
+                {/* Edit Handles */}
+                {isSelected && (
+                  <>
+                    <path
+                      d={`M ${geo.startPos.x} ${geo.startPos.y} L ${geo.controlPos.x} ${geo.controlPos.y} L ${geo.endPos.x} ${geo.endPos.y}`}
+                      stroke="#cbd5e1"
+                      strokeDasharray="4,4"
+                      strokeWidth="1.5"
+                      fill="none"
+                      pointerEvents="none"
+                    />
+                    <circle
+                      cx={geo.startPos.x}
+                      cy={geo.startPos.y}
+                      r={HANDLE_RADIUS}
+                      fill="#22c55e"
+                      stroke="white"
+                      strokeWidth="2"
+                      style={{
+                        cursor: "pointer",
+                        filter: "drop-shadow(0 1px 2px rgb(0 0 0 / 0.1))",
+                      }}
+                      onMouseDown={(e) =>
+                        handleHandleMouseDown(e, transition.id, "source")
+                      }
+                    />
+                    <circle
+                      cx={geo.endPos.x}
+                      cy={geo.endPos.y}
+                      r={HANDLE_RADIUS}
+                      fill="#ef4444"
+                      stroke="white"
+                      strokeWidth="2"
+                      style={{
+                        cursor: "pointer",
+                        filter: "drop-shadow(0 1px 2px rgb(0 0 0 / 0.1))",
+                      }}
+                      onMouseDown={(e) =>
+                        handleHandleMouseDown(e, transition.id, "target")
+                      }
+                    />
+                    <circle
+                      cx={geo.controlPos.x}
+                      cy={geo.controlPos.y}
+                      r={HANDLE_RADIUS}
+                      fill="#3b82f6"
+                      stroke="white"
+                      strokeWidth="2"
+                      style={{
+                        cursor: "move",
+                        filter: "drop-shadow(0 1px 2px rgb(0 0 0 / 0.1))",
+                      }}
+                      onMouseDown={(e) =>
+                        handleHandleMouseDown(e, transition.id, "control")
+                      }
+                    />
+                  </>
                 )}
               </g>
             );
           })}
-
-          {/* Arrow markers */}
-          <defs>
-            <marker
-              id="arrowhead-norm"
-              markerWidth="10"
-              markerHeight="10"
-              refX="9"
-              refY="3"
-              orient="auto"
-            >
-              <polygon points="0 0, 10 3, 0 6" fill="#666" />
-            </marker>
-            <marker
-              id="arrowhead-sel"
-              markerWidth="10"
-              markerHeight="10"
-              refX="9"
-              refY="3"
-              orient="auto"
-            >
-              <polygon points="0 0, 10 3, 0 6" fill="#1976d2" />
-            </marker>
-          </defs>
         </svg>
       </div>
     </div>

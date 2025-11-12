@@ -20,7 +20,6 @@ class ApiService {
       timeout: 10000,
     });
 
-    // Error interceptor
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
@@ -30,12 +29,17 @@ class ApiService {
     );
   }
 
-  /**
-   * Check API health
-   */
-  async checkHealth(): Promise<{ status: string; uptime: number }> {
+  async checkHealth(): Promise<{
+    status: string;
+    uptime: number;
+    verifierAvailable: boolean;
+  }> {
     const response = await this.client.get<
-      ApiResponse<{ status: string; uptime: number }>
+      ApiResponse<{
+        status: string;
+        uptime: number;
+        verifierAvailable: boolean;
+      }>
     >("/health");
     if (!response.data.success) {
       throw new Error(response.data.error || "Health check failed");
@@ -44,8 +48,66 @@ class ApiService {
   }
 
   /**
-   * Validate state machine
+   * Verify state machine with C++ engine
    */
+  async verifyMachine(stateMachine: StateMachine): Promise<{
+    isValid: boolean;
+    reachableStates: number;
+    totalStates: number;
+    errors: string[];
+    warnings: string[];
+    deadlocks: string[];
+    summary: string;
+  }> {
+    const response = await this.client.post<
+      ApiResponse<{
+        isValid: boolean;
+        reachableStates: number;
+        totalStates: number;
+        errors: string[];
+        warnings: string[];
+        deadlocks: string[];
+        summary: string;
+      }>
+    >("/verify", stateMachine);
+
+    if (!response.data.success) {
+      throw new Error(response.data.error || "Verification failed");
+    }
+    return response.data.data!;
+  }
+
+  /**
+   * Check if state is reachable
+   */
+  async checkReachability(
+    stateMachine: StateMachine,
+    stateId: string,
+  ): Promise<{ isReachable: boolean; message: string }> {
+    const response = await this.client.post<
+      ApiResponse<{ isReachable: boolean; message: string }>
+    >("/check-reachability", { stateMachine, stateId });
+
+    if (!response.data.success) {
+      throw new Error(response.data.error || "Reachability check failed");
+    }
+    return response.data.data!;
+  }
+
+  /**
+   * Find deadlock states
+   */
+  async findDeadlocks(stateMachine: StateMachine): Promise<string[]> {
+    const response = await this.client.post<
+      ApiResponse<{ deadlocks: string[] }>
+    >("/find-deadlocks", stateMachine);
+
+    if (!response.data.success) {
+      throw new Error(response.data.error || "Deadlock detection failed");
+    }
+    return response.data.data!.deadlocks;
+  }
+
   async validateMachine(
     stateMachine: StateMachine,
   ): Promise<{ valid: boolean; errors: string[] }> {
@@ -58,9 +120,6 @@ class ApiService {
     return response.data.data!;
   }
 
-  /**
-   * Simulate state machine execution
-   */
   async simulateMachine(
     stateMachine: StateMachine,
     inputs: string[],
@@ -86,10 +145,6 @@ class ApiService {
     }
     return response.data.data!;
   }
-
-  /**
-   * Generate test cases
-   */
   async generateTests(
     stateMachine: StateMachine,
   ): Promise<{ testCases: any[]; count: number }> {
@@ -104,5 +159,4 @@ class ApiService {
   }
 }
 
-// Singleton instance
 export const apiService = new ApiService();

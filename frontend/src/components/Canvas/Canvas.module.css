@@ -1,41 +1,98 @@
 .canvas {
   width: 100%;
-  height: calc(100vh - 100px);
-  border: 1px solid #ccc;
+  height: 100%;
   position: relative;
   overflow: hidden;
-  background-color: #f9f9f9;
+  /* Modern Grid Background */
+  background-color: #f8fafc;
+  background-image: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.05) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+  /* Optional: Add a larger grid for better depth */
+  /*
+  background-image:
+      linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px),
+      linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px);
+  background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+  */
 }
 
 .stateNode {
   position: absolute;
   width: 100px;
   height: 100px;
-  border: 3px solid #333;
-  border-radius: 8px;
+  /* Cleaner, thinner border */
+  border: 2px solid #1e293b; /* Slate-800 */
+  border-radius: 12px; /* Slightly more rounded for a modern look */
   background-color: white;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: move;
   user-select: none;
-  font-weight: bold;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  color: #1e293b;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Subtle shadow for depth */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .stateNode:hover {
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
 }
 
+/* Selected state - Matches the blue from your reference */
 .stateNodeSelected {
-  border-color: #1976d2;
-  box-shadow: 0 0 10px #1976d2;
+  border-color: #3b82f6; /* Blue-500 */
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3),
+    0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Transition source - Matches the green from your reference */
+.stateNodeSource {
+  border-color: #22c55e; /* Green-500 */
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3),
+    0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .stateNodeFinal {
-  background-color: #fff59d;
+  /* Double border effect for final states */
+  border-style: double;
+  border-width: 6px;
 }
 
 .stateNodeInitial {
   border-radius: 50%;
+}
+
+.stateName {
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 0 8px;
+  /* Ensure long names don't break layout */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.initialIndicator {
+  font-size: 0.75rem;
+  color: #64748b; /* Slate-500 */
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
 }

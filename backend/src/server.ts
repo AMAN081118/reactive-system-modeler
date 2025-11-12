@@ -253,6 +253,102 @@ app.post("/api/generate-tests", (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Verification endpoint (mock/fallback implementation)
+ * If you do not have the C++ verifier yet, this will run basic structural checks.
+ */
+app.post("/api/verify", (req: Request, res: Response) => {
+  try {
+    const stateMachine: StateMachine = req.body;
+
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const deadlocks: string[] = [];
+    const reachableStates = new Set<string>();
+    const queue: string[] = [];
+    const stateMap = new Map(stateMachine.states.map((s) => [s.id, s]));
+
+    // Check initial state
+    const initialStates = stateMachine.states.filter((s) => s.isInitial);
+    if (initialStates.length === 0) {
+      errors.push("No initial state defined");
+    }
+    if (initialStates.length > 1) {
+      errors.push("Multiple initial states found");
+    }
+
+    // Check for transitions to non-existent states
+    for (const transition of stateMachine.transitions) {
+      const fromExists = stateMachine.states.some(
+        (s) => s.id === transition.from,
+      );
+      const toExists = stateMachine.states.some((s) => s.id === transition.to);
+      if (!fromExists) {
+        errors.push(`Transition from non-existent state: ${transition.from}`);
+      }
+      if (!toExists) {
+        errors.push(`Transition to non-existent state: ${transition.to}`);
+      }
+    }
+
+    // Reachability analysis
+    if (initialStates.length === 1) {
+      queue.push(initialStates[0].id);
+      while (queue.length > 0) {
+        const curr = queue.shift()!;
+        if (!reachableStates.has(curr)) {
+          reachableStates.add(curr);
+          const outgoing = stateMachine.transitions.filter(
+            (t) => t.from === curr,
+          );
+          for (const t of outgoing) queue.push(t.to);
+        }
+      }
+      stateMachine.states.forEach((s) => {
+        if (!reachableStates.has(s.id)) {
+          warnings.push(`Unreachable state: ${s.name}`);
+        }
+      });
+    }
+
+    // Deadlock detection
+    stateMachine.states.forEach((s) => {
+      const outgoing = stateMachine.transitions.filter((t) => t.from === s.id);
+      if (outgoing.length === 0 && !s.isFinal) {
+        deadlocks.push(s.name);
+        warnings.push(`Potential deadlock in state: ${s.name}`);
+      }
+    });
+
+    // Report summary
+    const summary = `States: ${stateMachine.states.length} (Reachable: ${
+      reachableStates.size
+    }) | Transitions: ${stateMachine.transitions.length} | Status: ${
+      errors.length === 0 ? "VALID" : "INVALID"
+    }`;
+
+    res.json({
+      success: true,
+      data: {
+        isValid: errors.length === 0,
+        reachableStates: reachableStates.size,
+        totalStates: stateMachine.states.length,
+        errors,
+        warnings,
+        deadlocks,
+        summary,
+      },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: `Verification error: ${error}`,
+      timestamp: Date.now(),
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

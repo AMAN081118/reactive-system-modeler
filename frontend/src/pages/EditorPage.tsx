@@ -1,12 +1,46 @@
 import React, { useState, useEffect, useRef } from "react";
 import Canvas from "../components/Canvas/Canvas";
-import Toolbar from "../components/Toolbar/Toolbar";
 import PropertyPanel from "../components/PropertyPanel/PropertyPanel";
 import Simulator from "../components/Simulator/SimulatorEngine";
 import SaveLoadPanel from "../components/SaveLoad/SaveLoadPanel";
 import TransitionList from "../components/TransitionList/TransitionList";
-import { StateMachine, State, Transition } from "../models/types";
+import VerificationPanel from "../components/Verification/VerificationPanel";
+import ExamplesSidebar from "../components/Examples/ExamplesSidebar";
+import DescriptionPanel from "../components/Canvas/DescriptionPanel";
+import TestCasesPanel from "../components/TestCases/TestCasesPanel";
+import ExportPanel from "../components/Exports/ExportPanel";
+import { StateMachine, State } from "../models/types";
 import { StorageService } from "../services/storageService";
+import styles from "./EditorPage.module.css";
+import {
+  MousePointer2,
+  PlusCircle,
+  ArrowRightLeft,
+  Trash2,
+  BookOpen,
+  Settings,
+  PlayCircle,
+  CheckCircle2,
+  Download,
+  Save,
+  PanelRightClose,
+  PanelRightOpen,
+  Activity,
+  ListTree,
+  FlaskConical,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+} from "lucide-react";
+
+type RightPanelTab =
+  | "properties"
+  | "transitions"
+  | "simulator"
+  | "verification"
+  | "testcases"
+  | "export"
+  | "saveload";
 
 const EditorPage: React.FC = () => {
   const createNewMachine = (): StateMachine => ({
@@ -23,113 +57,62 @@ const EditorPage: React.FC = () => {
     updatedAt: new Date(),
   });
 
+  // --- State ---
   const [stateMachine, setStateMachine] = useState<StateMachine>(() => {
-    const saved = StorageService.loadCurrentMachine();
-    return saved || createNewMachine();
+    return StorageService.loadCurrentMachine() || createNewMachine();
   });
-
   const [selectedStateId, setSelectedStateId] = useState<string>("");
   const [selectedTransitionId, setSelectedTransitionId] = useState<
     string | null
   >(null);
   const [isTransitionMode, setIsTransitionMode] = useState<boolean>(false);
-  const [rightPanelWidth, setRightPanelWidth] = useState<number>(350);
+  const [rightPanelWidth, setRightPanelWidth] = useState<number>(400);
   const [rightPanelCollapsed, setRightPanelCollapsed] =
     useState<boolean>(false);
-  const [rightPanelTab, setRightPanelTab] = useState<
-    "properties" | "transitions" | "simulator" | "saveload"
-  >("properties");
+  const [rightPanelTab, setRightPanelTab] =
+    useState<RightPanelTab>("properties");
   const [isResizing, setIsResizing] = useState<boolean>(false);
+  const [examplesOpen, setExamplesOpen] = useState<boolean>(false);
+  // Changed default to false so it's hidden initially
+  const [descPanelOpen, setDescPanelOpen] = useState<boolean>(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-save periodically
+  // Auto-save & Keyboard Shortcuts
   useEffect(() => {
-    const interval = setInterval(() => {
-      StorageService.saveMachine(stateMachine);
-    }, 30000);
-
+    const interval = setInterval(
+      () => StorageService.saveMachine(stateMachine),
+      30000,
+    );
     return () => clearInterval(interval);
   }, [stateMachine]);
 
-  // Handle resize
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing || !containerRef.current) return;
-
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newWidth = containerRect.width - (e.clientX - containerRect.left);
-
-      // Constrain width between 250px and 600px
-      const constrainedWidth = Math.max(250, Math.min(600, newWidth));
-      setRightPanelWidth(constrainedWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    if (isResizing) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    }
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "default";
-      document.body.style.userSelect = "auto";
-    };
-  }, [isResizing]);
-
-  // Get selected objects
-  const selectedState = selectedStateId
-    ? stateMachine.states.find((s) => s.id === selectedStateId) || null
-    : null;
-
-  const selectedTransition = selectedTransitionId
-    ? stateMachine.transitions.find((t) => t.id === selectedTransitionId) ||
-      null
-    : null;
-
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Delete") {
-        handleDeleteSelected();
-      }
-      if (e.key === "Escape") {
-        setIsTransitionMode(false);
-      }
+      if (e.key === "Delete") handleDeleteSelected();
+      if (e.key === "Escape") setIsTransitionMode(false);
       if (e.key === "Tab" && e.ctrlKey) {
         e.preventDefault();
-        setRightPanelCollapsed(!rightPanelCollapsed);
+        setRightPanelCollapsed((prev) => !prev);
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedStateId, selectedTransitionId, rightPanelCollapsed]);
+  }, [selectedStateId, selectedTransitionId]);
 
-  // Handlers
-  const handleAddState = (stateName: string, isInitial: boolean): void => {
+  // --- Handlers ---
+  const handleAddState = (isInitial: boolean) => {
     if (isInitial && stateMachine.states.some((s) => s.isInitial)) {
-      alert("Initial state already exists. Remove it first to add a new one.");
+      alert("Only one initial state allowed.");
       return;
     }
-
     const newState: State = {
       id: `state-${Date.now()}`,
-      name: stateName,
-      position: {
-        x: Math.random() * 400 + 100,
-        y: Math.random() * 300 + 100,
-      },
+      name: `State ${stateMachine.states.length + 1}`,
+      position: { x: 100 + Math.random() * 50, y: 100 + Math.random() * 50 },
       isInitial,
       isFinal: false,
     };
-
     setStateMachine({
       ...stateMachine,
       states: [...stateMachine.states, newState],
@@ -137,343 +120,519 @@ const EditorPage: React.FC = () => {
     });
   };
 
-  const handleDeleteSelected = (): void => {
+  const handleDeleteSelected = () => {
     if (selectedStateId) {
-      const updatedStates = stateMachine.states.filter(
-        (s) => s.id !== selectedStateId,
-      );
-      const updatedTransitions = stateMachine.transitions.filter(
-        (t) => t.from !== selectedStateId && t.to !== selectedStateId,
-      );
-
       setStateMachine({
         ...stateMachine,
-        states: updatedStates,
-        transitions: updatedTransitions,
+        states: stateMachine.states.filter((s) => s.id !== selectedStateId),
+        transitions: stateMachine.transitions.filter(
+          (t) => t.from !== selectedStateId && t.to !== selectedStateId,
+        ),
         updatedAt: new Date(),
       });
-
       setSelectedStateId("");
     } else if (selectedTransitionId) {
-      const updatedTransitions = stateMachine.transitions.filter(
-        (t) => t.id !== selectedTransitionId,
-      );
-
       setStateMachine({
         ...stateMachine,
-        transitions: updatedTransitions,
+        transitions: stateMachine.transitions.filter(
+          (t) => t.id !== selectedTransitionId,
+        ),
         updatedAt: new Date(),
       });
-
       setSelectedTransitionId(null);
     }
   };
 
-  const handleStateMachineChange = (updatedSM: StateMachine): void => {
-    setStateMachine({
-      ...updatedSM,
-      updatedAt: new Date(),
-    });
-  };
-
-  const handleSelectState = (stateId: string): void => {
-    setSelectedStateId(stateId);
-    setRightPanelTab("properties");
-    if (rightPanelCollapsed) setRightPanelCollapsed(false);
-  };
-
-  const handleSelectTransition = (transitionId: string | null): void => {
-    setSelectedTransitionId(transitionId);
-    if (transitionId) {
-      setRightPanelTab("properties");
-      if (rightPanelCollapsed) setRightPanelCollapsed(false);
+  // --- Resizing Logic ---
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !containerRef.current) return;
+      const newW =
+        containerRef.current.getBoundingClientRect().right - e.clientX;
+      setRightPanelWidth(Math.max(320, Math.min(800, newW)));
+    };
+    const handleMouseUp = () => setIsResizing(false);
+    if (isResizing) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
     }
-  };
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
 
-  const handleStateUpdate = (updatedState: State): void => {
-    setStateMachine({
-      ...stateMachine,
-      states: stateMachine.states.map((s) =>
-        s.id === updatedState.id ? updatedState : s,
-      ),
-      updatedAt: new Date(),
-    });
-  };
+  // --- Derived State ---
+  const selectedState =
+    stateMachine.states.find((s) => s.id === selectedStateId) || null;
+  const selectedTransition =
+    stateMachine.transitions.find((t) => t.id === selectedTransitionId) || null;
 
-  const handleTransitionUpdate = (updatedTransition: Transition): void => {
-    setStateMachine({
-      ...stateMachine,
-      transitions: stateMachine.transitions.map((t) =>
-        t.id === updatedTransition.id ? updatedTransition : t,
-      ),
-      updatedAt: new Date(),
-    });
-  };
-
-  const handleDeleteTransition = (transitionId: string): void => {
-    const updatedTransitions = stateMachine.transitions.filter(
-      (t) => t.id !== transitionId,
-    );
-
-    setStateMachine({
-      ...stateMachine,
-      transitions: updatedTransitions,
-      updatedAt: new Date(),
-    });
-
-    setSelectedTransitionId(null);
-  };
-
-  const handleLoadMachine = (machine: StateMachine): void => {
-    setStateMachine(machine);
-    setSelectedStateId("");
-    setSelectedTransitionId(null);
-    setIsTransitionMode(false);
-  };
-
-  const handleNewMachine = (): void => {
-    if (
-      window.confirm(
-        "Create a new machine? Current unsaved changes will be lost.",
-      )
-    ) {
-      handleLoadMachine(createNewMachine());
+  const getPanelTitle = (tab: RightPanelTab) => {
+    switch (tab) {
+      case "properties":
+        return "Properties";
+      case "transitions":
+        return "Transitions List";
+      case "simulator":
+        return "Simulator";
+      case "verification":
+        return "Model Verification";
+      case "testcases":
+        return "Test Cases";
+      case "export":
+        return "Export";
+      case "saveload":
+        return "Save / Load";
+      default:
+        return "";
     }
-  };
-
-  const containerStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    height: "100vh",
-  };
-
-  const mainAreaStyle: React.CSSProperties = {
-    display: "flex",
-    flex: 1,
-    overflow: "hidden",
-    position: "relative",
-  };
-
-  const canvasContainerStyle: React.CSSProperties = {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    minWidth: "300px",
-    overflow: "hidden",
-  };
-
-  const dividerStyle: React.CSSProperties = {
-    width: "6px",
-    backgroundColor: "#ddd",
-    cursor: "col-resize",
-    transition: isResizing ? "none" : "background-color 0.2s",
-    // ':hover': {
-    //   backgroundColor: '#1976d2',
-    // },
-  };
-
-  const rightPanelStyle: React.CSSProperties = {
-    width: rightPanelCollapsed ? "40px" : `${rightPanelWidth}px`,
-    backgroundColor: "#f9f9f9",
-    borderLeft: "1px solid #ddd",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    transition: rightPanelCollapsed ? "width 0.3s ease" : "none",
-    minWidth: "40px",
-    maxWidth: "600px",
-  };
-
-  const tabsStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: rightPanelCollapsed ? "column" : "row",
-    borderBottom: rightPanelCollapsed ? "none" : "1px solid #ddd",
-    backgroundColor: "#f0f0f0",
-  };
-
-  const tabStyle = (isActive: boolean): React.CSSProperties => ({
-    flex: rightPanelCollapsed ? 0 : 1,
-    padding: rightPanelCollapsed ? "8px" : "10px",
-    textAlign: "center",
-    cursor: "pointer",
-    backgroundColor: isActive ? "white" : "#f0f0f0",
-    borderBottom:
-      !rightPanelCollapsed && isActive ? "3px solid #1976d2" : "none",
-    borderRight: rightPanelCollapsed && isActive ? "3px solid #1976d2" : "none",
-    fontWeight: isActive ? "bold" : "normal",
-    fontSize: rightPanelCollapsed ? "0.6em" : "0.75em",
-    whiteSpace: rightPanelCollapsed ? "pre-wrap" : "nowrap",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: rightPanelCollapsed ? "35px" : "auto",
-  });
-
-  const scrollableAreaStyle: React.CSSProperties = {
-    flex: 1,
-    overflowY: "auto",
-    padding: rightPanelCollapsed ? "0" : "10px",
-  };
-
-  const collapseButtonStyle: React.CSSProperties = {
-    position: "absolute",
-    right: rightPanelCollapsed ? "8px" : "8px",
-    top: "70px",
-    zIndex: 1000,
-    backgroundColor: "#1976d2",
-    color: "white",
-    border: "none",
-    borderRadius: "4px",
-    padding: "6px 10px",
-    cursor: "pointer",
-    fontSize: "0.8em",
   };
 
   return (
-    <div style={containerStyle}>
-      {/* Toolbar */}
-      <Toolbar
-        onAddState={handleAddState}
-        onDeleteSelected={handleDeleteSelected}
-        onToggleTransitionMode={setIsTransitionMode}
-        isTransitionMode={isTransitionMode}
-        stateMachineCount={stateMachine.states.length}
-      />
+    <div className={styles.pageContainer}>
+      {/* === HEADER === */}
+      <header className={styles.header}>
+        <div className={styles.logoSection}>
+          <Activity size={26} strokeWidth={2.5} />
+          <h1 className={styles.appTitle}>Reactive System Modeler</h1>
+        </div>
+        <div className={styles.headerStats}>
+          <span>{stateMachine.states.length} States</span>
+          <span className={styles.separator}></span>
+          <span>{stateMachine.transitions.length} Transitions</span>
+        </div>
+      </header>
 
-      {/* Main Editor Area */}
-      <div style={mainAreaStyle} ref={containerRef}>
-        {/* Canvas */}
-        <div style={canvasContainerStyle}>
-          <Canvas
-            stateMachine={stateMachine}
-            onStateMachineChange={handleStateMachineChange}
-            onSelectState={handleSelectState}
-            onSelectTransition={handleSelectTransition}
-            isTransitionMode={isTransitionMode}
-            onTransitionModeChange={setIsTransitionMode}
+      {/* === MAIN CONTENT === */}
+      <div className={styles.mainContent} ref={containerRef}>
+        {/* LEFT TOOLBAR - Now with Text */}
+        <div className={styles.leftToolbar}>
+          <div className={styles.toolbarSectionTitle}>Tools</div>
+          <ToolbarButton
+            icon={<MousePointer2 size={18} />}
+            label="Select"
+            active={!isTransitionMode}
+            onClick={() => setIsTransitionMode(false)}
+          />
+          <ToolbarButton
+            icon={<ArrowRightLeft size={18} />}
+            label="Connect"
+            active={isTransitionMode}
+            onClick={() => setIsTransitionMode(true)}
+          />
+
+          <div className={styles.toolbarSectionTitle}>Nodes</div>
+          <ToolbarButton
+            icon={<PlusCircle size={18} />}
+            label="State"
+            onClick={() => handleAddState(false)}
+          />
+          <ToolbarButton
+            icon={
+              <div
+                style={{
+                  fontWeight: "900",
+                  fontSize: "14px",
+                  width: 18,
+                  textAlign: "center",
+                }}
+              >
+                S
+              </div>
+            }
+            label="Initial State"
+            onClick={() => handleAddState(true)}
+          />
+
+          <div className={styles.toolbarSectionTitle}>Actions</div>
+          <ToolbarButton
+            icon={<Trash2 size={18} />}
+            label="Delete"
+            disabled={!selectedStateId && !selectedTransitionId}
+            onClick={handleDeleteSelected}
+            danger
+          />
+
+          <div className={styles.spacer} />
+          <div className={styles.toolbarDivider} />
+
+          {/* New Info Button */}
+          <ToolbarButton
+            icon={<Info size={18} />}
+            label="Info"
+            active={descPanelOpen}
+            onClick={() => setDescPanelOpen(!descPanelOpen)}
+          />
+          <ToolbarButton
+            icon={<BookOpen size={18} />}
+            label="Examples"
+            onClick={() => setExamplesOpen(true)}
           />
         </div>
 
-        {/* Resizable Divider */}
+        {/* CENTER CANVAS AREA */}
+        <div className={styles.canvasArea}>
+          <Canvas
+            stateMachine={stateMachine}
+            onStateMachineChange={(sm) =>
+              setStateMachine({ ...sm, updatedAt: new Date() })
+            }
+            onSelectState={(id) => {
+              setSelectedStateId(id);
+              setRightPanelTab("properties");
+              if (id) setRightPanelCollapsed(false);
+            }}
+            onSelectTransition={(id) => {
+              setSelectedTransitionId(id);
+              if (id) {
+                setRightPanelTab("properties");
+                setRightPanelCollapsed(false);
+              }
+            }}
+            isTransitionMode={isTransitionMode}
+            onTransitionModeChange={setIsTransitionMode}
+          />
+          {/* Conditionally render DescriptionPanel to avoid scrollbars when hidden */}
+          {descPanelOpen && (
+            <DescriptionPanel
+              stateMachine={stateMachine}
+              isOpen={descPanelOpen}
+              onClose={() => setDescPanelOpen(false)}
+            />
+          )}
+        </div>
+
+        {/* RESIZER */}
+        {!rightPanelCollapsed && (
+          <div
+            className={`${styles.resizer} ${
+              isResizing ? styles.resizerActive : ""
+            }`}
+            onMouseDown={() => setIsResizing(true)}
+          />
+        )}
+
+        {/* RIGHT PANEL - Sleeker */}
         <div
-          style={dividerStyle}
-          onMouseDown={() => setIsResizing(true)}
-          onMouseEnter={(e) => {
-            if (!isResizing)
-              (e.currentTarget as HTMLDivElement).style.backgroundColor =
-                "#1976d2";
-          }}
-          onMouseLeave={(e) => {
-            if (!isResizing)
-              (e.currentTarget as HTMLDivElement).style.backgroundColor =
-                "#ddd";
-          }}
-          title="Drag to resize (Min: 250px, Max: 600px)"
-        />
-
-        {/* Right Panel */}
-        <div style={rightPanelStyle}>
-          {/* Collapse Button */}
-          <button
-            onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
-            style={collapseButtonStyle}
-            title="Toggle panel (Ctrl+Tab)"
-          >
-            {rightPanelCollapsed ? "◀" : "▶"}
-          </button>
-
-          {/* Tabs */}
-          <div style={tabsStyle}>
-            <div
-              style={tabStyle(rightPanelTab === "properties")}
-              onClick={() => setRightPanelTab("properties")}
-              title="Properties"
-            >
-              {rightPanelCollapsed ? "📝" : "Properties"}
+          className={`${styles.rightPanel} ${
+            rightPanelCollapsed ? styles.rightPanelCollapsed : ""
+          }`}
+          style={{ width: rightPanelCollapsed ? 56 : rightPanelWidth }}
+        >
+          {rightPanelCollapsed ? (
+            // COLLAPSED STATE: Just vertical icons
+            <div className={styles.tabsVertical}>
+              <button
+                onClick={() => setRightPanelCollapsed(false)}
+                className={styles.collapseButton}
+                title="Expand Panel"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className={styles.toolbarDivider} style={{ width: "80%" }} />
+              <TabButton
+                icon={<Settings size={20} />}
+                label="Properties"
+                id="properties"
+                current={rightPanelTab}
+                collapsed={true}
+                onClick={(id) => {
+                  setRightPanelTab(id);
+                  setRightPanelCollapsed(false);
+                }}
+              />
+              <TabButton
+                icon={<ListTree size={20} />}
+                label="Transitions"
+                id="transitions"
+                current={rightPanelTab}
+                collapsed={true}
+                onClick={(id) => {
+                  setRightPanelTab(id);
+                  setRightPanelCollapsed(false);
+                }}
+              />
+              <TabButton
+                icon={<PlayCircle size={20} />}
+                label="Simulate"
+                id="simulator"
+                current={rightPanelTab}
+                collapsed={true}
+                onClick={(id) => {
+                  setRightPanelTab(id);
+                  setRightPanelCollapsed(false);
+                }}
+              />
+              <TabButton
+                icon={<FlaskConical size={20} />}
+                label="Tests"
+                id="testcases"
+                current={rightPanelTab}
+                collapsed={true}
+                onClick={(id) => {
+                  setRightPanelTab(id);
+                  setRightPanelCollapsed(false);
+                }}
+              />
+              <TabButton
+                icon={<CheckCircle2 size={20} />}
+                label="Verify"
+                id="verification"
+                current={rightPanelTab}
+                collapsed={true}
+                onClick={(id) => {
+                  setRightPanelTab(id);
+                  setRightPanelCollapsed(false);
+                }}
+              />
+              <TabButton
+                icon={<Download size={20} />}
+                label="Export"
+                id="export"
+                current={rightPanelTab}
+                collapsed={true}
+                onClick={(id) => {
+                  setRightPanelTab(id);
+                  setRightPanelCollapsed(false);
+                }}
+              />
+              <TabButton
+                icon={<Save size={20} />}
+                label="Save/Load"
+                id="saveload"
+                current={rightPanelTab}
+                collapsed={true}
+                onClick={(id) => {
+                  setRightPanelTab(id);
+                  setRightPanelCollapsed(false);
+                }}
+              />
             </div>
-            <div
-              style={tabStyle(rightPanelTab === "transitions")}
-              onClick={() => setRightPanelTab("transitions")}
-              title="Transitions"
-            >
-              {rightPanelCollapsed ? "🔗" : "Transitions"}
-            </div>
-            <div
-              style={tabStyle(rightPanelTab === "simulator")}
-              onClick={() => setRightPanelTab("simulator")}
-              title="Simulator"
-            >
-              {rightPanelCollapsed ? "▶️" : "Simulator"}
-            </div>
-            <div
-              style={tabStyle(rightPanelTab === "saveload")}
-              onClick={() => setRightPanelTab("saveload")}
-              title="Save/Load"
-            >
-              {rightPanelCollapsed ? "💾" : "Save/Load"}
-            </div>
-          </div>
-
-          {/* Tab Content */}
-          {!rightPanelCollapsed && (
-            <div style={scrollableAreaStyle}>
-              {rightPanelTab === "properties" && (
-                <PropertyPanel
-                  selectedState={selectedState}
-                  selectedTransition={selectedTransition}
-                  onStateUpdate={handleStateUpdate}
-                  onTransitionUpdate={handleTransitionUpdate}
-                />
-              )}
-
-              {rightPanelTab === "transitions" && (
-                <TransitionList
-                  stateMachine={stateMachine}
-                  selectedTransitionId={selectedTransitionId}
-                  onSelectTransition={handleSelectTransition}
-                  onDeleteTransition={handleDeleteTransition}
-                  onUpdateTransition={handleTransitionUpdate}
-                />
-              )}
-
-              {rightPanelTab === "simulator" && (
-                <Simulator stateMachine={stateMachine} />
-              )}
-
-              {rightPanelTab === "saveload" && (
-                <SaveLoadPanel
-                  currentMachine={stateMachine}
-                  onLoadMachine={handleLoadMachine}
-                  onNewMachine={handleNewMachine}
-                />
-              )}
-            </div>
+          ) : (
+            // EXPANDED STATE: Full header with tabs
+            <>
+              <div className={styles.panelHeader}>
+                <div className={styles.panelControls}>
+                  <h2 className={styles.panelTitle}>
+                    {getPanelTitle(rightPanelTab)}
+                  </h2>
+                  <button
+                    onClick={() => setRightPanelCollapsed(true)}
+                    className={styles.collapseButton}
+                    title="Collapse Panel"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+                <div className={styles.tabsContainer}>
+                  <TabButton
+                    icon={<Settings size={16} />}
+                    label="Properties"
+                    id="properties"
+                    current={rightPanelTab}
+                    collapsed={false}
+                    onClick={setRightPanelTab}
+                  />
+                  <TabButton
+                    icon={<ListTree size={16} />}
+                    label="Transitions"
+                    id="transitions"
+                    current={rightPanelTab}
+                    collapsed={false}
+                    onClick={setRightPanelTab}
+                  />
+                  <TabButton
+                    icon={<PlayCircle size={16} />}
+                    label="Simulate"
+                    id="simulator"
+                    current={rightPanelTab}
+                    collapsed={false}
+                    onClick={setRightPanelTab}
+                  />
+                  <TabButton
+                    icon={<FlaskConical size={16} />}
+                    label="Tests"
+                    id="testcases"
+                    current={rightPanelTab}
+                    collapsed={false}
+                    onClick={setRightPanelTab}
+                  />
+                  <TabButton
+                    icon={<CheckCircle2 size={16} />}
+                    label="Verify"
+                    id="verification"
+                    current={rightPanelTab}
+                    collapsed={false}
+                    onClick={setRightPanelTab}
+                  />
+                  <TabButton
+                    icon={<Download size={16} />}
+                    label="Export"
+                    id="export"
+                    current={rightPanelTab}
+                    collapsed={false}
+                    onClick={setRightPanelTab}
+                  />
+                  <TabButton
+                    icon={<Save size={16} />}
+                    label="Save/Load"
+                    id="saveload"
+                    current={rightPanelTab}
+                    collapsed={false}
+                    onClick={setRightPanelTab}
+                  />
+                </div>
+              </div>
+              <div className={styles.panelContent}>
+                {rightPanelTab === "properties" && (
+                  <PropertyPanel
+                    selectedState={selectedState}
+                    selectedTransition={selectedTransition}
+                    onStateUpdate={(s) =>
+                      setStateMachine({
+                        ...stateMachine,
+                        states: stateMachine.states.map((st) =>
+                          st.id === s.id ? s : st,
+                        ),
+                        updatedAt: new Date(),
+                      })
+                    }
+                    onTransitionUpdate={(t) =>
+                      setStateMachine({
+                        ...stateMachine,
+                        transitions: stateMachine.transitions.map((tr) =>
+                          tr.id === t.id ? t : tr,
+                        ),
+                        updatedAt: new Date(),
+                      })
+                    }
+                  />
+                )}
+                {rightPanelTab === "transitions" && (
+                  <TransitionList
+                    stateMachine={stateMachine}
+                    selectedTransitionId={selectedTransitionId}
+                    onSelectTransition={setSelectedTransitionId}
+                    onDeleteTransition={(id) =>
+                      setStateMachine({
+                        ...stateMachine,
+                        transitions: stateMachine.transitions.filter(
+                          (t) => t.id !== id,
+                        ),
+                        updatedAt: new Date(),
+                      })
+                    }
+                    onUpdateTransition={(t) =>
+                      setStateMachine({
+                        ...stateMachine,
+                        transitions: stateMachine.transitions.map((tr) =>
+                          tr.id === t.id ? t : tr,
+                        ),
+                        updatedAt: new Date(),
+                      })
+                    }
+                  />
+                )}
+                {rightPanelTab === "simulator" && (
+                  <Simulator stateMachine={stateMachine} />
+                )}
+                {rightPanelTab === "testcases" && (
+                  <TestCasesPanel stateMachine={stateMachine} />
+                )}
+                {rightPanelTab === "verification" && (
+                  <VerificationPanel stateMachine={stateMachine} />
+                )}
+                {rightPanelTab === "export" && (
+                  <ExportPanel stateMachine={stateMachine} />
+                )}
+                {rightPanelTab === "saveload" && (
+                  <SaveLoadPanel
+                    currentMachine={stateMachine}
+                    onLoadMachine={(m) => {
+                      setStateMachine(m);
+                      setSelectedStateId("");
+                      setSelectedTransitionId(null);
+                    }}
+                    onNewMachine={() =>
+                      window.confirm("Discard current work?") &&
+                      setStateMachine(createNewMachine())
+                    }
+                  />
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      {/* Status Bar */}
-      <div
-        style={{
-          padding: "10px 15px",
-          backgroundColor: "#f5f5f5",
-          borderTop: "1px solid #ddd",
-          fontSize: "0.85em",
-          color: "#666",
-          display: "flex",
-          justifyContent: "space-between",
+      {/* Modals */}
+      <ExamplesSidebar
+        isOpen={examplesOpen}
+        onClose={() => setExamplesOpen(false)}
+        onLoadExample={(m) => {
+          setStateMachine({ ...m, id: `ex-${Date.now()}` });
+          setExamplesOpen(false);
         }}
-      >
-        <span>
-          States: {stateMachine.states.length} | Transitions:{" "}
-          {stateMachine.transitions.length} | Selected:{" "}
-          {selectedState?.name || "None"}
-        </span>
-        <span style={{ color: "#999", fontSize: "0.75em" }}>
-          Drag divider to resize | Ctrl+Tab: Collapse panel | Delete: Remove
-        </span>
-      </div>
+      />
     </div>
+  );
+};
+
+// --- HELPER COMPONENTS ---
+
+const ToolbarButton: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+}> = ({ icon, label, active, disabled, danger, onClick }) => {
+  let className = styles.toolbarBtn;
+  if (active) className += ` ${styles.toolbarBtnActive}`;
+  if (disabled) className += ` ${styles.toolbarBtnDisabled}`;
+  if (danger) className += ` ${styles.toolbarBtnDanger}`;
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      className={className}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+};
+
+const TabButton: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  id: RightPanelTab;
+  current: RightPanelTab;
+  collapsed: boolean;
+  onClick: (id: RightPanelTab) => void;
+}> = ({ icon, label, id, current, collapsed, onClick }) => {
+  if (collapsed) {
+    let className = styles.iconTabBtn;
+    if (current === id) className += ` ${styles.iconTabBtnActive}`;
+    return (
+      <button onClick={() => onClick(id)} title={label} className={className}>
+        {icon}
+      </button>
+    );
+  }
+
+  let className = styles.tabBtn;
+  if (current === id) className += ` ${styles.tabBtnActive}`;
+
+  return (
+    <button onClick={() => onClick(id)} className={className}>
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 };
 

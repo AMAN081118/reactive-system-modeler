@@ -1,9 +1,14 @@
 import React from "react";
 import EditorPage from "./pages/EditorPage";
-import "./App.css";
+import WelcomeModal from "./components/WelcomeModal";
 
 function App() {
-  return <EditorPage />;
+  return (
+    <>
+      <WelcomeModal />
+      <EditorPage />
+    </>
+  );
 }
 
 export default App;

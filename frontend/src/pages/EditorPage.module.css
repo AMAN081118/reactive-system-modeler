@@ -1,0 +1,415 @@
+:root {
+  --primary-color: #2563eb; /* Blue-600 */
+  --primary-light: #dbeafe; /* Blue-100 */
+  --primary-hover: #1d4ed8; /* Blue-700 */
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --danger-color: #dc2626; /* Red-600 */
+  --danger-light: #fef2f2; /* Red-50 */
+  --header-height: 56px;
+  --toolbar-width: 220px;
+}
+
+.pageContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--gray-50);
+  color: var(--gray-800);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* --- HEADER --- */
+.header {
+  height: var(--header-height);
+  background-color: white;
+  border-bottom: 1px solid var(--gray-200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  flex-shrink: 0;
+  z-index: 10;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.logoSection {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--primary-color);
+}
+
+.appTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.headerStats {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  font-weight: 500;
+}
+
+.separator {
+  height: 16px;
+  width: 1px;
+  background-color: var(--gray-300);
+}
+
+/* --- MAIN LAYOUT --- */
+.mainContent {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  height: calc(100vh - var(--header-height)); /* Explicit height constraint */
+}
+
+/* --- LEFT TOOLBAR --- */
+.leftToolbar {
+  width: var(--toolbar-width);
+  background-color: white;
+  border-right: 1px solid var(--gray-200);
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1rem;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  z-index: 10;
+  overflow-y: auto; /* Restored auto in case screen is very short */
+}
+
+/* Hide scrollbar for cleaner look if not needed, but allow scrolling */
+.leftToolbar::-webkit-scrollbar {
+  display: none;
+}
+.leftToolbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.toolbarSectionTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  letter-spacing: 0.05em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  padding-left: 0.75rem;
+}
+
+.toolbarSectionTitle:first-child {
+  margin-top: 0;
+}
+
+.toolbarDivider {
+  height: 1px;
+  background-color: var(--gray-200);
+  margin: 0.75rem 0.5rem;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* --- CANVAS AREA --- */
+.canvasArea {
+  flex: 1;
+  position: relative;
+  background-color: var(--gray-100);
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.02);
+}
+
+/* --- RESIZER --- */
+.resizer {
+  width: 1px;
+  cursor: col-resize;
+  background-color: var(--gray-200);
+  transition: all 0.2s;
+  z-index: 20;
+  position: relative;
+}
+
+.resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+  z-index: 1;
+}
+
+.resizer:hover,
+.resizerActive {
+  background-color: var(--primary-color);
+  width: 2px;
+}
+
+/* --- RIGHT PANEL --- */
+.rightPanel {
+  background-color: white;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 15px -3px rgba(0, 0, 0, 0.05);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  height: 100%; /* Ensure it doesn't grow beyond parent */
+  max-height: 100%;
+  overflow: hidden; /* Prevent outer scrollbar, rely on inner .panelContent */
+}
+
+.rightPanelCollapsed {
+  width: 56px !important;
+}
+
+.panelHeader {
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  flex-shrink: 0; /* Header shouldn't shrink */
+}
+
+.panelControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.panelTitle {
+  font-weight: 600;
+  color: var(--gray-800);
+  margin: 0;
+  font-size: 1rem;
+}
+
+.collapseButton {
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--gray-400);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+}
+
+.collapseButton:hover {
+  background-color: var(--gray-100);
+  color: var(--gray-600);
+}
+
+.tabsContainer {
+  display: flex;
+  padding: 0 1rem;
+  gap: 1rem;
+  border-bottom: 1px solid var(--gray-200);
+  overflow-x: auto;
+  /* Explicitly allow scrollbars if needed, though 'auto' should do it.
+     Removing 'scrollbar-width: none' to show standard scrollbar if it overflows. */
+  /* scrollbar-width: none;  <-- REMOVED THIS to show scrollbar */
+  flex-shrink: 0;
+}
+
+/* Only hide webkit scrollbar if you want a totally invisible scroll,
+   but you asked for it to be visible when overflowing.
+   Commenting this out to allow default browser scrollbar. */
+/*
+.tabsContainer::-webkit-scrollbar {
+  display: none;
+}
+*/
+
+/* Optional: Style the scrollbar to be sleek but visible */
+.tabsContainer::-webkit-scrollbar {
+  height: 4px; /* Thin horizontal scrollbar */
+}
+
+.tabsContainer::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabsContainer::-webkit-scrollbar-thumb {
+  background-color: var(--gray-300);
+  border-radius: 4px;
+}
+
+.tabsContainer::-webkit-scrollbar-thumb:hover {
+  background-color: var(--gray-400);
+}
+
+.tabsVertical {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0;
+  gap: 0.5rem;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.panelContent {
+  flex: 1;
+  overflow-y: auto; /* Ensure vertical scrolling is enabled */
+  background-color: white;
+  padding: 0;
+  min-height: 0; /* Critical for nested flex scrolling */
+}
+
+/* --- BUTTON COMPONENTS --- */
+.toolbarBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: none;
+  color: var(--gray-600);
+  font-weight: 500;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.toolbarBtn:hover {
+  background-color: var(--gray-100);
+  color: var(--gray-900);
+}
+
+.toolbarBtnActive {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.toolbarBtnDanger {
+  color: var(--danger-color);
+}
+
+.toolbarBtnDanger:hover {
+  background-color: var(--danger-light);
+  color: var(--danger-color);
+}
+
+.toolbarBtnDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tabBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 0.25rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--gray-500);
+  font-weight: 500;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  position: relative;
+  transition: color 0.2s;
+}
+
+.tabBtn::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: transparent;
+  transition: background-color 0.2s;
+}
+
+.tabBtn:hover {
+  color: var(--gray-800);
+}
+
+.tabBtnActive {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.tabBtnActive::after {
+  background-color: var(--primary-color);
+}
+
+.iconTabBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 0.5rem;
+  border: none;
+  background: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.iconTabBtn:hover {
+  background-color: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.iconTabBtnActive {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+}
+
+.iconTabBtn::before {
+  content: attr(title);
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--gray-800);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, right 0.2s;
+  margin-right: 0.5rem;
+  z-index: 100;
+}
+
+.iconTabBtn:hover::before {
+  opacity: 1;
+  right: calc(100% + 0.5rem);
+}

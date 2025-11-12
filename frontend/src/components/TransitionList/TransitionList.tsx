@@ -1,5 +1,14 @@
 import React, { useState } from "react";
 import { StateMachine, Transition } from "../../models/types";
+import {
+  Edit2,
+  Trash2,
+  ArrowRight,
+  Save,
+  X,
+  ListFilter,
+  ArrowRightLeft,
+} from "lucide-react";
 
 interface TransitionListProps {
   stateMachine: StateMachine;
@@ -20,144 +29,126 @@ const TransitionList: React.FC<TransitionListProps> = ({
   const [editInput, setEditInput] = useState<string>("");
   const [editOutput, setEditOutput] = useState<string>("");
 
-  const handleEditStart = (transition: Transition): void => {
+  const handleEditStart = (transition: Transition) => {
     setEditingId(transition.id);
     setEditInput(transition.input || "");
     setEditOutput(transition.output || "");
   };
 
-  const handleEditSave = (transition: Transition): void => {
-    onUpdateTransition({
-      ...transition,
-      input: editInput,
-      output: editOutput,
-    });
-    setEditingId(null);
-  };
-
-  const handleEditCancel = (): void => {
+  const handleEditSave = (transition: Transition) => {
+    onUpdateTransition({ ...transition, input: editInput, output: editOutput });
     setEditingId(null);
   };
 
   const containerStyle: React.CSSProperties = {
+    height: "100%",
     display: "flex",
     flexDirection: "column",
-    height: "100%",
+    backgroundColor: "#ffffff",
+    fontFamily:
+      "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   };
 
   const headerStyle: React.CSSProperties = {
-    padding: "15px",
-    borderBottom: "1px solid #ddd",
-    fontWeight: "bold",
-    backgroundColor: "#f0f0f0",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontSize: "1rem",
+    fontWeight: "600",
+    color: "#111827",
+    padding: "16px 20px",
+    borderBottom: "1px solid #e5e7eb",
+    backgroundColor: "#f9fafb",
   };
 
   const listStyle: React.CSSProperties = {
     flex: 1,
     overflowY: "auto",
-    padding: "10px",
+    padding: "16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
   };
 
-  const itemStyle = (isSelected: boolean): React.CSSProperties => ({
-    padding: "12px",
-    border: "1px solid #ddd",
-    borderRadius: "4px",
-    marginBottom: "8px",
-    backgroundColor: isSelected ? "#e3f2fd" : "white",
-    borderLeft: isSelected ? "4px solid #1976d2" : "4px solid transparent",
-    cursor: "pointer",
+  const itemStyle = (
+    isSelected: boolean,
+    isEditing: boolean,
+  ): React.CSSProperties => ({
+    padding: "12px 16px",
+    borderRadius: "8px",
+    border: `1px solid ${isSelected ? "#3b82f6" : "#e5e7eb"}`,
+    backgroundColor: isSelected ? "#eff6ff" : "#ffffff",
+    boxShadow: isEditing
+      ? "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+      : "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+    transition: "all 0.2s ease",
+    cursor: isEditing ? "default" : "pointer",
   });
 
-  const itemHeaderStyle: React.CSSProperties = {
+  const emptyStyle: React.CSSProperties = {
     display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "8px",
-    fontSize: "0.9em",
-  };
-
-  const stateNameStyle: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    fontSize: "0.85em",
-    color: "#666",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontWeight: "bold",
-    color: "#333",
-    padding: "4px 8px",
-    backgroundColor: "#f0f0f0",
-    borderRadius: "3px",
-    fontSize: "0.8em",
-  };
-
-  const inputOutputStyle: React.CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "8px",
-    marginBottom: "8px",
-  };
-
-  const fieldStyle: React.CSSProperties = {
-    fontSize: "0.85em",
-  };
-
-  const fieldLabelStyle: React.CSSProperties = {
-    display: "block",
-    fontWeight: "bold",
-    fontSize: "0.75em",
-    marginBottom: "3px",
-    color: "#555",
-  };
-
-  const fieldInputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "4px",
-    border: "1px solid #ddd",
-    borderRadius: "3px",
-    fontSize: "0.8em",
-    boxSizing: "border-box",
-  };
-
-  const buttonGroupStyle: React.CSSProperties = {
-    display: "flex",
-    gap: "4px",
-  };
-
-  const smallButtonStyle = (color: string): React.CSSProperties => ({
-    padding: "4px 12px",
-    backgroundColor: color,
-    color: "white",
-    border: "none",
-    borderRadius: "3px",
-    cursor: "pointer",
-    fontSize: "0.75em",
-    fontWeight: "bold",
-  });
-
-  const emptyMessageStyle: React.CSSProperties = {
-    display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     height: "100%",
-    color: "#999",
+    color: "#9ca3af",
     textAlign: "center",
-    fontSize: "0.9em",
+    padding: "20px",
   };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "0.75rem",
+    fontWeight: "600",
+    color: "#6b7280",
+    textTransform: "uppercase",
+    marginBottom: "4px",
+  };
+
+  const valueStyle: React.CSSProperties = {
+    fontSize: "0.875rem",
+    color: "#111827",
+    fontWeight: "500",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "6px 10px",
+    borderRadius: "6px",
+    border: "1px solid #d1d5db",
+    fontSize: "0.875rem",
+    marginBottom: "10px",
+  };
+
+  const actionButtonStyle = (color: string): React.CSSProperties => ({
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "6px",
+    borderRadius: "6px",
+    color: color,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "background-color 0.2s",
+  });
 
   if (stateMachine.transitions.length === 0) {
     return (
       <div style={containerStyle}>
         <div style={headerStyle}>
-          Transitions ({stateMachine.transitions.length})
+          <ListFilter size={18} className="text-blue-600" /> All Transitions (0)
         </div>
-        <div style={emptyMessageStyle}>
-          <div>
+        <div style={emptyStyle}>
+          <ArrowRightLeft
+            size={40}
+            strokeWidth={1.5}
+            style={{ marginBottom: "16px", opacity: 0.5 }}
+          />
+          <p style={{ margin: 0, fontSize: "0.95rem" }}>
             No transitions yet.
-            <br /> Use "Add Transition" to create one.
-          </div>
+            <br />
+            Connect states on the canvas to create one.
+          </p>
         </div>
       </div>
     );
@@ -166,9 +157,9 @@ const TransitionList: React.FC<TransitionListProps> = ({
   return (
     <div style={containerStyle}>
       <div style={headerStyle}>
-        Transitions ({stateMachine.transitions.length})
+        <ListFilter size={18} className="text-blue-600" />
+        All Transitions ({stateMachine.transitions.length})
       </div>
-
       <div style={listStyle}>
         {stateMachine.transitions.map((transition) => {
           const fromState = stateMachine.states.find(
@@ -183,17 +174,32 @@ const TransitionList: React.FC<TransitionListProps> = ({
           return (
             <div
               key={transition.id}
-              style={itemStyle(isSelected)}
-              onClick={() => onSelectTransition(transition.id)}
+              style={itemStyle(isSelected, isEditing)}
+              onClick={() => !isEditing && onSelectTransition(transition.id)}
             >
-              {/* Header with transition info */}
-              <div style={itemHeaderStyle}>
-                <div style={stateNameStyle}>
-                  <strong>{fromState?.name || "Unknown"}</strong>
-                  <span>→</span>
-                  <strong>{toState?.name || "Unknown"}</strong>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "0.95rem",
+                    fontWeight: "500",
+                    color: "#374151",
+                  }}
+                >
+                  <span>{fromState?.name || "?"}</span>
+                  <ArrowRight size={16} className="text-gray-400" />
+                  <span>{toState?.name || "?"}</span>
                 </div>
-                <div style={buttonGroupStyle}>
+                <div style={{ display: "flex", gap: "4px" }}>
                   {isEditing ? (
                     <>
                       <button
@@ -201,18 +207,20 @@ const TransitionList: React.FC<TransitionListProps> = ({
                           e.stopPropagation();
                           handleEditSave(transition);
                         }}
-                        style={smallButtonStyle("#4caf50")}
+                        style={actionButtonStyle("#059669")}
+                        title="Save"
                       >
-                        Save
+                        <Save size={16} />
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleEditCancel();
+                          setEditingId(null);
                         }}
-                        style={smallButtonStyle("#999")}
+                        style={actionButtonStyle("#6b7280")}
+                        title="Cancel"
                       >
-                        Cancel
+                        <X size={16} />
                       </button>
                     </>
                   ) : (
@@ -222,77 +230,74 @@ const TransitionList: React.FC<TransitionListProps> = ({
                           e.stopPropagation();
                           handleEditStart(transition);
                         }}
-                        style={smallButtonStyle("#1976d2")}
+                        style={actionButtonStyle("#2563eb")}
+                        title="Edit"
                       >
-                        Edit
+                        <Edit2 size={16} />
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onDeleteTransition(transition.id);
                         }}
-                        style={smallButtonStyle("#f44336")}
+                        style={actionButtonStyle("#dc2626")}
+                        title="Delete"
                       >
-                        Delete
+                        <Trash2 size={16} />
                       </button>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Input/Output display or edit */}
               {isEditing ? (
                 <div
-                  style={inputOutputStyle}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "12px",
+                  }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div style={fieldStyle}>
-                    <label style={fieldLabelStyle}>Input</label>
+                  <div>
+                    <div style={labelStyle}>Input</div>
                     <input
                       type="text"
                       value={editInput}
                       onChange={(e) => setEditInput(e.target.value)}
-                      style={fieldInputStyle}
-                      placeholder="e.g., event1"
-                      onClick={(e) => e.stopPropagation()}
+                      style={inputStyle}
+                      autoFocus
                     />
                   </div>
-                  <div style={fieldStyle}>
-                    <label style={fieldLabelStyle}>Output</label>
+                  <div>
+                    <div style={labelStyle}>Output</div>
                     <input
                       type="text"
                       value={editOutput}
                       onChange={(e) => setEditOutput(e.target.value)}
-                      style={fieldInputStyle}
-                      placeholder="e.g., action1"
-                      onClick={(e) => e.stopPropagation()}
+                      style={inputStyle}
                     />
                   </div>
                 </div>
               ) : (
-                <div style={inputOutputStyle}>
-                  <div style={fieldStyle}>
-                    <span style={fieldLabelStyle}>Input:</span>
-                    <span style={labelStyle}>{transition.input || "—"}</span>
+                <div style={{ display: "flex", gap: "16px" }}>
+                  <div>
+                    <div style={labelStyle}>Input</div>
+                    <div style={valueStyle}>{transition.input || "—"}</div>
                   </div>
-                  <div style={fieldStyle}>
-                    <span style={fieldLabelStyle}>Output:</span>
-                    <span style={labelStyle}>{transition.output || "—"}</span>
+                  <div>
+                    <div style={labelStyle}>Output</div>
+                    <div style={valueStyle}>{transition.output || "—"}</div>
                   </div>
-                </div>
-              )}
-
-              {/* Optional: Guard and Action info */}
-              {(transition.guard || transition.action) && !isEditing && (
-                <div
-                  style={{
-                    fontSize: "0.75em",
-                    color: "#666",
-                    marginTop: "6px",
-                  }}
-                >
-                  {transition.guard && <div>Guard: {transition.guard}</div>}
-                  {transition.action && <div>Action: {transition.action}</div>}
+                  {(transition.guard || transition.action) && (
+                    <div>
+                      <div style={labelStyle}>Other</div>
+                      <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+                        {transition.guard && <span>[G] </span>}
+                        {transition.action && <span>(A)</span>}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
