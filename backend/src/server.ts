@@ -4,7 +4,7 @@ import bodyParser from "body-parser";
 import { StateMachine } from "./types/types";
 
 const app: Express = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 // Middleware
 app.use(
@@ -350,8 +350,8 @@ app.post("/api/verify", (req: Request, res: Response) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 export default app;
