@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Info, CheckCircle2 } from "lucide-react";
+import { Info, CheckCircle2, Github } from "lucide-react";
 
 const WelcomeModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -9,6 +9,7 @@ const WelcomeModal: React.FC = () => {
     if (!hasSeenWelcome) {
       setIsOpen(true);
     }
+    // setIsOpen(true);
   }, []);
 
   const handleClose = () => {
@@ -29,7 +30,7 @@ const WelcomeModal: React.FC = () => {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 3000, // Ensure it's above everything else
+    zIndex: 3000,
   };
 
   const modalStyle: React.CSSProperties = {
@@ -73,6 +74,7 @@ const WelcomeModal: React.FC = () => {
     borderTop: "1px solid #e5e7eb",
     display: "flex",
     justifyContent: "flex-end",
+    gap: 4,
   };
 
   const buttonStyle: React.CSSProperties = {
@@ -111,11 +113,25 @@ const WelcomeModal: React.FC = () => {
             format to enable seamless integration into academic documentation
             and reports.
           </p>
-          <p style={{ marginBottom: 0 }}>
+          <p>
             The tool is targeted for academic research, teaching, and rapid
             prototyping of reactive systems and cyber-physical system
             controllers.
           </p>
+
+          <div
+            style={{
+              marginTop: "20px",
+              padding: "10px 14px",
+              borderLeft: "4px solid #2563eb",
+              backgroundColor: "#f3f4f6",
+              borderRadius: "6px",
+              fontWeight: 600,
+              color: "#1f2937",
+            }}
+          >
+            Developed by Aman Kumar
+          </div>
         </div>
         <div style={footerStyle}>
           <button
@@ -129,6 +145,23 @@ const WelcomeModal: React.FC = () => {
             }
           >
             <CheckCircle2 size={18} /> I understand
+          </button>
+          <button
+            style={buttonStyle}
+            onClick={() => {
+              window.open(
+                "https://github.com/AMAN081118/reactive-system-modeler",
+                "_blank",
+              );
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = "#1c1d21ff")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "#17181bff")
+            }
+          >
+            <Github size={18} /> Github
           </button>
         </div>
       </div>
