@@ -1,4 +1,3 @@
-import React from "react";
 import EditorPage from "./pages/EditorPage";
 import WelcomeModal from "./components/WelcomeModal";
 
