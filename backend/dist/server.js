@@ -7,7 +7,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const body_parser_1 = __importDefault(require("body-parser"));
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 // Middleware
 app.use((0, cors_1.default)({
     origin: process.env.CORS_ORIGIN || "*",
@@ -286,8 +286,8 @@ app.post("/api/verify", (req, res) => {
         });
     }
 });
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
 });
 exports.default = app;
 //# sourceMappingURL=server.js.map
