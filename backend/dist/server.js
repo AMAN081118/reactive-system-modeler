@@ -9,7 +9,10 @@ const body_parser_1 = __importDefault(require("body-parser"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Middleware
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin: process.env.CORS_ORIGIN || "*",
+    credentials: true,
+}));
 app.use(body_parser_1.default.json({ limit: "50mb" }));
 // Routes
 app.get("/api/health", (req, res) => {
@@ -205,10 +208,6 @@ app.post("/api/generate-tests", (req, res) => {
         });
     }
 });
-/**
- * Verification endpoint (mock/fallback implementation)
- * If you do not have the C++ verifier yet, this will run basic structural checks.
- */
 app.post("/api/verify", (req, res) => {
     try {
         const stateMachine = req.body;
@@ -288,7 +287,7 @@ app.post("/api/verify", (req, res) => {
     }
 });
 app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
 });
 exports.default = app;
 //# sourceMappingURL=server.js.map

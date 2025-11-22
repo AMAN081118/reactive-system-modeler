@@ -2,6 +2,7 @@
  * Core type definitions for Reactive System Modeler
  * All types are strictly typed - no 'any' allowed
  */
+// ... (existing Position, State, Transition, Variable, StateMachine, ApiResponse, CanvasState, EditorAction)
 
 // Position interface for node placement
 export interface Position {
@@ -29,10 +30,10 @@ export interface Transition {
   output?: string;
   guard?: string;
   action?: string;
-  // --- New fields for editable, curved transitions ---
-  sourceAngle?: number; // Angle (radians) where arrow leaves source node
-  targetAngle?: number; // Angle (radians) where arrow enters target node
-  controlOffset?: Position; // Offset for the bezier control point relative to the midpoint
+  // Editable fields
+  sourceAngle?: number;
+  targetAngle?: number;
+  controlOffset?: Position;
 }
 
 // Variable definition
@@ -80,7 +81,7 @@ export interface CanvasState {
 // Editor actions
 export type EditorAction =
   | { type: "SELECT_STATE"; payload: string }
-  | { type: "SELECT_TRANSITION"; payload: string | null } // changes
+  | { type: "SELECT_TRANSITION"; payload: string }
   | { type: "DESELECT" }
   | { type: "SET_ZOOM"; payload: number }
   | { type: "ADD_STATE"; payload: State }
@@ -89,3 +90,12 @@ export type EditorAction =
   | { type: "REMOVE_TRANSITION"; payload: string }
   | { type: "UPDATE_STATE"; payload: State }
   | { type: "UPDATE_TRANSITION"; payload: Transition };
+
+// *** NEWLY ADDED / MOVED ***
+// Test Case definition
+export interface TestCase {
+  id: string;
+  name: string;
+  inputs: string[];
+  expectedFinalState: string;
+}

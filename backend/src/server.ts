@@ -7,7 +7,12 @@ const app: Express = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || "*",
+    credentials: true,
+  }),
+);
 app.use(bodyParser.json({ limit: "50mb" }));
 
 // Type definitions
@@ -253,10 +258,6 @@ app.post("/api/generate-tests", (req: Request, res: Response) => {
   }
 });
 
-/**
- * Verification endpoint (mock/fallback implementation)
- * If you do not have the C++ verifier yet, this will run basic structural checks.
- */
 app.post("/api/verify", (req: Request, res: Response) => {
   try {
     const stateMachine: StateMachine = req.body;
@@ -350,7 +351,7 @@ app.post("/api/verify", (req: Request, res: Response) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
 
 export default app;

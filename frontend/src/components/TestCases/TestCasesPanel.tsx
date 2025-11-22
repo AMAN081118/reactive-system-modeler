@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { StateMachine } from "../../models/types";
+// Import TestCase from the shared types file
+import { StateMachine, TestCase } from "../../models/types";
 import { apiService } from "../../services/apiService";
 import Simulator from "../Simulator/SimulatorEngine";
 import {
@@ -7,34 +8,35 @@ import {
   Play,
   AlertTriangle,
   Loader2,
-  CheckCircle2,
   PlayCircle,
 } from "lucide-react";
 
-interface TestCase {
-  id: string;
-  name: string;
-  inputs: string[];
-  expectedFinalState: string;
-}
-
 interface TestCasesPanelProps {
   stateMachine: StateMachine;
+  onTestCasesGenerated: (testCases: TestCase[]) => void; // <-- NEW PROP
 }
 
-const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
+const TestCasesPanel: React.FC<TestCasesPanelProps> = ({
+  stateMachine,
+  onTestCasesGenerated, // <-- NEW PROP
+}) => {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTest, setSelectedTest] = useState<TestCase | null>(null);
 
   useEffect(() => {
-    if (stateMachine.states.length === 0) return;
+    if (stateMachine.states.length === 0) {
+      onTestCasesGenerated([]); // Clear test cases if no states
+      return;
+    }
     setLoading(true);
     apiService
       .generateTests(stateMachine)
       .then((res: { testCases: any[]; count: number }) => {
-        setTestCases(res.testCases);
+        const newTestCases = res.testCases as TestCase[];
+        setTestCases(newTestCases);
+        onTestCasesGenerated(newTestCases); // <-- SEND DATA TO PARENT
         setLoading(false);
         setError(null);
       })
@@ -42,9 +44,11 @@ const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
         setError(`Failed to generate test cases. Is the backend running?`);
         console.error(err);
         setLoading(false);
+        onTestCasesGenerated([]); // Clear test cases on error
       });
-  }, [stateMachine]);
+  }, [stateMachine, onTestCasesGenerated]); // Added prop to dependency array
 
+  // ... (All styles remain the same)
   const panelStyle: React.CSSProperties = {
     height: "100%",
     display: "flex",
@@ -53,7 +57,6 @@ const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
     fontFamily:
       "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   };
-
   const headerStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -65,13 +68,11 @@ const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
     borderBottom: "1px solid #e5e7eb",
     backgroundColor: "#f9fafb",
   };
-
   const contentStyle: React.CSSProperties = {
-    flex: 1,
-    overflowY: "auto",
     padding: "20px",
+    overflowY: "auto",
+    flex: 1,
   };
-
   const listStyle: React.CSSProperties = {
     listStyle: "none",
     padding: 0,
@@ -80,7 +81,6 @@ const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
     flexDirection: "column",
     gap: "12px",
   };
-
   const itemStyle = (isSelected: boolean): React.CSSProperties => ({
     padding: "16px",
     borderRadius: "8px",
@@ -89,7 +89,6 @@ const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
     cursor: "pointer",
     transition: "all 0.2s ease",
   });
-
   const testNameStyle: React.CSSProperties = {
     fontSize: "0.95rem",
     fontWeight: "600",
@@ -99,7 +98,6 @@ const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
     justifyContent: "space-between",
     alignItems: "center",
   };
-
   const detailRowStyle: React.CSSProperties = {
     display: "flex",
     gap: "8px",
@@ -107,7 +105,6 @@ const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
     color: "#4b5563",
     marginTop: "4px",
   };
-
   const labelStyle: React.CSSProperties = {
     fontWeight: "600",
     color: "#6b7280",
@@ -115,7 +112,6 @@ const TestCasesPanel: React.FC<TestCasesPanelProps> = ({ stateMachine }) => {
     textTransform: "uppercase",
     minWidth: "70px",
   };
-
   const runButtonStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",

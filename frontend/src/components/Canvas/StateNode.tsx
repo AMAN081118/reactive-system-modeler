@@ -6,6 +6,7 @@ interface StateNodeProps {
   state: State;
   isSelected: boolean;
   isTransitionSource?: boolean;
+  isSimulationActive?: boolean; // <-- NEW PROP
   onClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   onMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
@@ -14,13 +15,22 @@ const StateNode: React.FC<StateNodeProps> = ({
   state,
   isSelected,
   isTransitionSource,
+  isSimulationActive, // <-- USING NEW PROP
   onClick,
   onMouseDown,
 }) => {
   // Combine classes based on state properties
   let className = styles.stateNode;
-  if (isSelected) className += ` ${styles.stateNodeSelected}`;
-  if (isTransitionSource) className += ` ${styles.stateNodeSource}`;
+
+  // Simulation has highest priority for styling
+  if (isSimulationActive) {
+    className += ` ${styles.stateNodeSimActive}`;
+  } else if (isSelected) {
+    className += ` ${styles.stateNodeSelected}`;
+  } else if (isTransitionSource) {
+    className += ` ${styles.stateNodeSource}`;
+  }
+
   if (state.isFinal) className += ` ${styles.stateNodeFinal}`;
   if (state.isInitial) className += ` ${styles.stateNodeInitial}`;
 

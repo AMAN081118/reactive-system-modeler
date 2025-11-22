@@ -1,7 +1,6 @@
 import React from "react";
 import { State, Transition } from "../../models/types";
 import {
-  Settings,
   Tag,
   FileText,
   ArrowRightLeft,

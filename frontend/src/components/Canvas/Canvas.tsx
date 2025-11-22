@@ -8,7 +8,7 @@ import {
   Position,
 } from "../../models/types";
 import StateNode from "./StateNode";
-import styles from "./Canvas.module.css"; // Import CSS Module
+import styles from "./Canvas.module.css";
 import {
   Info,
   ZoomIn,
@@ -18,6 +18,12 @@ import {
   Move,
 } from "lucide-react";
 
+// This is the new prop we will receive
+interface SimulationHighlight {
+  activeStateId: string | null;
+  activeTransitionId: string | null;
+}
+
 interface CanvasProps {
   stateMachine: StateMachine;
   onStateMachineChange: (sm: StateMachine) => void;
@@ -25,6 +31,7 @@ interface CanvasProps {
   onSelectTransition: (transitionId: string | null) => void;
   isTransitionMode: boolean;
   onTransitionModeChange: (mode: boolean) => void;
+  simulationStep?: SimulationHighlight | null; // <-- PROP ADDED HERE
 }
 
 // --- Geometry Constants & Helpers ---
@@ -73,6 +80,7 @@ function getRectEdgePoint(cx: number, cy: number, angle: number): Position {
 function getNodeBoundaryPoint(state: State, angle: number): Position {
   const cx = state.position.x + NODE_RADIUS;
   const cy = state.position.y + NODE_RADIUS;
+  // Use isInitial check from your StateNode logic
   return state.isInitial
     ? getCircleEdgePoint(cx, cy, angle)
     : getRectEdgePoint(cx, cy, angle);
@@ -209,6 +217,7 @@ const Canvas: React.FC<CanvasProps> = ({
   onSelectTransition,
   isTransitionMode,
   onTransitionModeChange,
+  simulationStep, // <-- USING THE NEW PROP
 }) => {
   const [canvasState, dispatch] = useReducer(canvasReducer, initialCanvasState);
   const [panX, setPanX] = useState(0);
@@ -216,7 +225,7 @@ const Canvas: React.FC<CanvasProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panStartX, setPanStartX] = useState(0);
   const [panStartY, setPanStartY] = useState(0);
-  const [showInfo, setShowInfo] = useState(true);
+  const [showInfo, setShowInfo] = useState(false);
 
   // Drag states
   const [draggedState, setDraggedState] = useState<{
@@ -243,6 +252,7 @@ const Canvas: React.FC<CanvasProps> = ({
     stateId: string,
     event: React.MouseEvent<HTMLDivElement>,
   ): void => {
+    if (simulationStep) return; // Disable clicks during simulation
     if (draggedState || draggedHandle || isPanning) return;
     event.stopPropagation();
 
@@ -296,6 +306,7 @@ const Canvas: React.FC<CanvasProps> = ({
     stateId: string,
     e: React.MouseEvent<HTMLDivElement>,
   ): void => {
+    if (simulationStep) return; // Disable drag during simulation
     if (isTransitionMode || e.button !== 0) return; // Only left click
     e.preventDefault();
     e.stopPropagation();
@@ -317,6 +328,7 @@ const Canvas: React.FC<CanvasProps> = ({
     transitionId: string,
     type: "source" | "target" | "control",
   ) => {
+    if (simulationStep) return; // Disable handle drag during simulation
     e.preventDefault();
     e.stopPropagation();
     setDraggedHandle({ transitionId, type });
@@ -420,6 +432,7 @@ const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handleCanvasClick = (): void => {
+    if (simulationStep) return; // Disable clicks during simulation
     if (draggedState || draggedHandle || isPanning) return;
     dispatch({ type: "DESELECT" });
     onSelectState("");
@@ -428,6 +441,7 @@ const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handleTransitionClick = (e: React.MouseEvent, transitionId: string) => {
+    if (simulationStep) return; // Disable clicks during simulation
     e.stopPropagation();
     dispatch({ type: "SELECT_TRANSITION", payload: transitionId });
     onSelectTransition(transitionId);
@@ -451,6 +465,20 @@ const Canvas: React.FC<CanvasProps> = ({
   };
 
   // --- Styles ---
+  const containerStyle: React.CSSProperties = {
+    transform: `translate(${panX}px, ${panY}px) scale(${canvasState.zoom})`,
+    transformOrigin: "0 0",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    transition:
+      isPanning || draggedState || draggedHandle
+        ? "none"
+        : "transform 0.1s ease-out",
+  };
+
   const zoomControlsStyle: React.CSSProperties = {
     position: "absolute",
     bottom: 24,
@@ -567,59 +595,68 @@ const Canvas: React.FC<CanvasProps> = ({
       onMouseDown={handleMouseDown}
     >
       {/* UI Controls */}
-      <button
-        onClick={() => setShowInfo(!showInfo)}
-        style={infoToggleStyle}
-        title={showInfo ? "Hide Info" : "Show Info"}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = "#f9fafb";
-          e.currentTarget.style.color = "#111827";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = "white";
-          e.currentTarget.style.color = "#4b5563";
-        }}
-      >
-        <Info size={20} />
-      </button>
-
-      <div style={infoStyle}>
-        <div style={infoHeaderStyle}>
-          <MousePointerClick size={16} className="text-blue-600" />
-          Canvas Controls
-        </div>
-        <div style={infoRowStyle}>
-          <span style={{ color: "#6b7280" }}>Zoom:</span>
-          <span style={{ fontWeight: "600" }}>
-            {(canvasState.zoom * 100).toFixed(0)}%
-          </span>
-        </div>
-        <div style={infoRowStyle}>
-          <span style={{ color: "#6b7280" }}>Position:</span>
-          <span style={{ fontFamily: "monospace" }}>
-            ({panX.toFixed(0)}, {panY.toFixed(0)})
-          </span>
-        </div>
-        <div
-          style={{
-            marginTop: "12px",
-            paddingTop: "12px",
-            borderTop: "1px solid #e5e7eb",
-            fontSize: "0.75rem",
-            color: "#6b7280",
-            display: "flex",
-            flexDirection: "column",
-            gap: "6px",
+      {!simulationStep && ( // Hide info toggle during simulation
+        <button
+          onClick={() => setShowInfo(!showInfo)}
+          style={infoToggleStyle}
+          title={showInfo ? "Hide Info" : "Show Info"}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#f9fafb";
+            e.currentTarget.style.color = "#111827";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "white";
+            e.currentTarget.style.color = "#4b5563";
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <Move size={14} /> Middle-click + drag to pan
+          <Info size={20} />
+        </button>
+      )}
+
+      {showInfo &&
+        !simulationStep && ( // Hide info box during simulation
+          <div style={infoStyle}>
+            <div style={infoHeaderStyle}>
+              <MousePointerClick size={16} className="text-blue-600" />
+              Canvas Controls
+            </div>
+            <div style={infoRowStyle}>
+              <span style={{ color: "#6b7280" }}>Zoom:</span>
+              <span style={{ fontWeight: "600" }}>
+                {(canvasState.zoom * 100).toFixed(0)}%
+              </span>
+            </div>
+            <div style={infoRowStyle}>
+              <span style={{ color: "#6b7280" }}>Position:</span>
+              <span style={{ fontFamily: "monospace" }}>
+                ({panX.toFixed(0)}, {panY.toFixed(0)})
+              </span>
+            </div>
+            <div
+              style={{
+                marginTop: "12px",
+                paddingTop: "12px",
+                borderTop: "1px solid #e5e7eb",
+                fontSize: "0.75rem",
+                color: "#6b7280",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <Move size={14} /> Middle-click + drag to pan
+              </div>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <ZoomIn size={14} /> Scroll to zoom in/out
+              </div>
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <ZoomIn size={14} /> Scroll to zoom in/out
-          </div>
-        </div>
-      </div>
+        )}
 
       {isTransitionMode && (
         <div style={instructionStyle}>
@@ -629,90 +666,81 @@ const Canvas: React.FC<CanvasProps> = ({
         </div>
       )}
 
-      <div style={zoomControlsStyle}>
-        <button
-          onClick={() =>
-            dispatch({
-              type: "SET_ZOOM",
-              payload: Math.max(0.3, canvasState.zoom * 0.9),
-            })
-          }
-          style={zoomButtonStyle}
-          title="Zoom Out"
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor = "#f3f4f6")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor = "transparent")
-          }
-        >
-          <ZoomOut size={20} />
-        </button>
-        <div style={zoomDividerStyle} />
-        <button
-          onClick={() => {
-            dispatch({ type: "SET_ZOOM", payload: 1 });
-            setPanX(0);
-            setPanY(0);
-          }}
-          style={zoomButtonStyle}
-          title="Reset View"
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor = "#f3f4f6")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor = "transparent")
-          }
-        >
-          <RotateCcw size={18} />
-        </button>
-        <div style={zoomDividerStyle} />
-        <button
-          onClick={() =>
-            dispatch({
-              type: "SET_ZOOM",
-              payload: Math.min(3, canvasState.zoom * 1.1),
-            })
-          }
-          style={zoomButtonStyle}
-          title="Zoom In"
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor = "#f3f4f6")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor = "transparent")
-          }
-        >
-          <ZoomIn size={20} />
-        </button>
-      </div>
+      {!simulationStep && ( // Hide zoom controls during simulation playback
+        <div style={zoomControlsStyle}>
+          <button
+            onClick={() =>
+              dispatch({
+                type: "SET_ZOOM",
+                payload: Math.max(0.3, canvasState.zoom * 0.9),
+              })
+            }
+            style={zoomButtonStyle}
+            title="Zoom Out"
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = "#f3f4f6")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "transparent")
+            }
+          >
+            <ZoomOut size={20} />
+          </button>
+          <div style={zoomDividerStyle} />
+          <button
+            onClick={() => {
+              dispatch({ type: "SET_ZOOM", payload: 1 });
+              setPanX(0);
+              setPanY(0);
+            }}
+            style={zoomButtonStyle}
+            title="Reset View"
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = "#f3f4f6")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "transparent")
+            }
+          >
+            <RotateCcw size={18} />
+          </button>
+          <div style={zoomDividerStyle} />
+          <button
+            onClick={() =>
+              dispatch({
+                type: "SET_ZOOM",
+                payload: Math.min(3, canvasState.zoom * 1.1),
+              })
+            }
+            style={zoomButtonStyle}
+            title="Zoom In"
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = "#f3f4f6")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "transparent")
+            }
+          >
+            <ZoomIn size={20} />
+          </button>
+        </div>
+      )}
 
       {/* Main Canvas Content */}
-      <div
-        style={{
-          transform: `translate(${panX}px, ${panY}px) scale(${canvasState.zoom})`,
-          transformOrigin: "0 0",
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          transition:
-            isPanning || draggedState || draggedHandle
-              ? "none"
-              : "transform 0.1s ease-out",
-        }}
-      >
+      <div style={containerStyle}>
         {/* Nodes */}
         {stateMachine.states.map((state) => (
           <StateNode
             key={state.id}
             state={state}
             isSelected={
-              canvasState.selectedStateId === state.id ||
-              transitionFromState === state.id
+              !simulationStep && canvasState.selectedStateId === state.id
             }
-            isTransitionSource={transitionFromState === state.id}
+            isTransitionSource={
+              !simulationStep && transitionFromState === state.id
+            }
+            // NEW: Pass simulation active state
+            isSimulationActive={simulationStep?.activeStateId === state.id}
             onClick={(event) => handleStateClick(state.id, event)}
             onMouseDown={(e) => handleStateMouseDown(state.id, e)}
           />
@@ -739,8 +767,7 @@ const Canvas: React.FC<CanvasProps> = ({
               refY="5"
               orient="auto-start-reverse"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />{" "}
-              {/* Slate-400 for normal arrows */}
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
             </marker>
             <marker
               id="arrowhead-sel"
@@ -750,8 +777,17 @@ const Canvas: React.FC<CanvasProps> = ({
               refY="5"
               orient="auto-start-reverse"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />{" "}
-              {/* Blue-500 for selected */}
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+            </marker>
+            <marker
+              id="arrowhead-sim"
+              markerWidth="10"
+              markerHeight="10"
+              refX="9"
+              refY="5"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
             </marker>
           </defs>
 
@@ -762,38 +798,60 @@ const Canvas: React.FC<CanvasProps> = ({
             const toState = stateMachine.states.find(
               (s) => s.id === transition.to,
             );
-
             if (!fromState || !toState) return null;
 
+            // Determine state
             const isSelected =
+              !simulationStep &&
               canvasState.selectedTransitionId === transition.id;
+            const isSimActive =
+              simulationStep?.activeTransitionId === transition.id;
+
             const geo = getTransitionGeometry(fromState, toState, transition);
+
+            let strokeColor = "#94a3b8";
+            let strokeWidth = 2;
+            let markerId = "arrowhead-norm";
+            let zIndex = 0;
+
+            if (isSelected) {
+              strokeColor = "#3b82f6";
+              strokeWidth = 3;
+              markerId = "arrowhead-sel";
+              zIndex = 1;
+            }
+            if (isSimActive) {
+              strokeColor = "#10b981";
+              strokeWidth = 4;
+              markerId = "arrowhead-sim";
+              zIndex = 2;
+            }
 
             return (
               <g
                 key={transition.id}
                 onClick={(e) => handleTransitionClick(e, transition.id)}
-                style={{ pointerEvents: "all", cursor: "pointer" }}
+                style={{
+                  pointerEvents: simulationStep ? "none" : "all",
+                  cursor: "pointer",
+                  zIndex: zIndex,
+                }}
               >
-                {/* Hit area */}
                 <path
                   d={geo.pathD}
                   stroke="transparent"
                   strokeWidth="15"
                   fill="none"
                 />
-                {/* Visible line */}
                 <path
                   d={geo.pathD}
-                  stroke={isSelected ? "#3b82f6" : "#94a3b8"}
-                  strokeWidth={isSelected ? 3 : 2}
+                  stroke={strokeColor}
+                  strokeWidth={strokeWidth}
                   fill="none"
-                  markerEnd={`url(#arrowhead-${isSelected ? "sel" : "norm"})`}
-                  opacity={isSelected ? 1 : 0.8}
+                  markerEnd={`url(#${markerId})`}
                   style={{ transition: "stroke 0.2s, stroke-width 0.2s" }}
                 />
 
-                {/* Label */}
                 {(transition.input ||
                   transition.output ||
                   transition.guard ||
@@ -807,8 +865,14 @@ const Canvas: React.FC<CanvasProps> = ({
                       width="72"
                       height="28"
                       fill="white"
-                      stroke={isSelected ? "#3b82f6" : "#e2e8f0"}
-                      strokeWidth="1"
+                      stroke={
+                        isSimActive
+                          ? "#10b981"
+                          : isSelected
+                          ? "#3b82f6"
+                          : "#e2e8f0"
+                      }
+                      strokeWidth={isSimActive || isSelected ? 2 : 1}
                       rx="6"
                       style={{ transition: "stroke 0.2s" }}
                     />
@@ -816,8 +880,14 @@ const Canvas: React.FC<CanvasProps> = ({
                       textAnchor="middle"
                       dominantBaseline="middle"
                       fontSize="11"
-                      fill={isSelected ? "#1e3a8a" : "#475569"}
-                      fontWeight={isSelected ? "600" : "500"}
+                      fill={
+                        isSimActive
+                          ? "#065f46"
+                          : isSelected
+                          ? "#1e3a8a"
+                          : "#475569"
+                      }
+                      fontWeight={isSimActive || isSelected ? "600" : "500"}
                       style={{
                         userSelect: "none",
                         pointerEvents: "none",
@@ -831,8 +901,7 @@ const Canvas: React.FC<CanvasProps> = ({
                   </g>
                 )}
 
-                {/* Edit Handles */}
-                {isSelected && (
+                {isSelected && !simulationStep && (
                   <>
                     <path
                       d={`M ${geo.startPos.x} ${geo.startPos.y} L ${geo.controlPos.x} ${geo.controlPos.y} L ${geo.endPos.x} ${geo.endPos.y}`}

@@ -37,7 +37,7 @@ const SaveLoadPanel: React.FC<SaveLoadPanelProps> = ({
     const machine = { ...currentMachine, name: machineNameInput };
     StorageService.saveMachine(machine);
     setSavedMachines(StorageService.getAllMachines());
-    // You might want to replace pure alerts with a nicer toast notification system later
+    // I might want to replace pure alerts with a nicer toast notification system later
     alert(`Machine "${machineNameInput}" saved successfully.`);
   };
 
